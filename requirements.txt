@@ -1,0 +1,4 @@
+pytelegrambotapi
+requests
+pyopenssl
+cryptography
