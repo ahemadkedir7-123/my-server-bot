@@ -7,8 +7,9 @@ from urllib.parse import urlparse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-TOKEN = os.getenv('8788982436:AAGRmbaKk7BAcht3QjOQtGdd0vsdLt3EqjI')
+TOKEN = "8788982436:AAGRmbaKk7BAcht3QjOQtGdd0vsdLt3EqjI"  # 
 bot = telebot.TeleBot(TOKEN)
+
 
 # የእርስዎ ሁለቱ ቻናሎች ዩዘርናም (እባክዎ @ በሚለው ይጻፉ)
 CHANNEL_1 = "@Nur_Tunnel_free_ethiopian"
