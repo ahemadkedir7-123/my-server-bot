@@ -1,4 +1,5 @@
 import os
+import io
 import threading
 import requests
 import socket
@@ -6,11 +7,15 @@ import ssl
 from flask import Flask
 import telebot
 from telebot import types
+from PIL import Image, ImageDraw
 
 # 1. የቦት ቶከን
 TOKEN = "8788982436:AAGRmbaKk7BAcht3QjOQtGdd0vsdLt3EqjI"  # 
 bot = telebot.TeleBot(TOKEN)
 
+
+# አዲሱ የፕሮሞሽን ዩዘርኔም/ሊንክ
+ADMIN_USERNAME = "https://t.me/Shemsadin_vip"
 
 # 2. ማስገደድ የሚፈለጉባቸው ቻናሎች
 REQUIRED_CHANNELS = ['@Nur_Tunnel_free_ethiopian', '@freeinternat10']
@@ -27,27 +32,24 @@ def check_subscription(user_id):
             return False
     return True
 
-# 4. ዋናውን ሜኑ (Inline Keyboard) ማሳያ ፋንክሽን
-def get_main_menu():
-    markup = types.InlineKeyboardMarkup(row_width=2)
+# 4. በቴሌግራም ታችኛው ክፍል የሚቀመጥ ዋና ሜኑ (Reply Keyboard Menu)
+def get_main_reply_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
-        types.InlineKeyboardButton("🌐 Subdomain Finder", callback_data="tool_subdomain"),
-        types.InlineKeyboardButton("📡 Web Host Scanner", callback_data="tool_scanner"),
-        types.InlineKeyboardButton("🔍 Domain & IP Recon", callback_data="tool_recon"),
-        types.InlineKeyboardButton("ℹ️ Telegram User Info", callback_data="tool_userinfo"),
-        types.InlineKeyboardButton("📞 Phone Metadata", callback_data="tool_phone"),
-        types.InlineKeyboardButton("🖼️ Image Info", callback_data="tool_image"),
-        types.InlineKeyboardButton("📢 PROMOTION MARKET", callback_data="tool_promo"),
-        types.InlineKeyboardButton("🆘 Help / How to Use", callback_data="tool_help")
+        types.KeyboardButton("🌐 Subdomain Finder"),
+        types.KeyboardButton("📡 Web Host Scanner"),
+        types.KeyboardButton("🔍 Domain & IP Recon"),
+        types.KeyboardButton("🖼️ Image Info & Editor"),
+        types.KeyboardButton("📢 PROMOTION MARKET"),
+        types.KeyboardButton("🆘 Help / How to Use")
     )
     return markup
 
-# 5. /start ትእዛዝ እና ቋሚ Menu Button ማዋቀር
+# 5. /start ትእዛዝ
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = message.chat.id
     
-    # ቻናል ማረጋገጫ
     if not check_subscription(chat_id):
         markup = types.InlineKeyboardMarkup()
         for ch in REQUIRED_CHANNELS:
@@ -56,7 +58,7 @@ def send_welcome(message):
         
         bot.send_message(
             chat_id, 
-            "⚠️ **ቦቱን ከመጠቀምዎ በፊት ከታች ያሉትን ቻናሎች መቀላቀል አለብዎት!**\n\nእባክዎ ቻናሎቹን ይቀላቀሉና 'Checked' የሚለውን ይጫኑ።",
+            "⚠️ **ቦቱን ከመጠቀምዎ በፊት ከታች ያሉትን ቻናሎች መቀላቀል አለብዎት!**\n\nእባክዎ ቻናቹን ይቀላቀሉና 'Checked' የሚለውን ይጫኑ።",
             reply_markup=markup,
             parse_mode="Markdown"
         )
@@ -65,74 +67,81 @@ def send_welcome(message):
     bot.send_message(
         chat_id, 
         "🛡️ **NetX Tools Pro Bot**\n\n"
-        "💎 Paid credits: **0**\n"
-        "⏳ Weekly access: **Yes**\n"
-        "🎯 Referrals: **0**\n\n"
-        "ማከናወን የሚፈልጉትን መሳሪያ ከታች ካሉት አማራጮች ይምረጡ፦",
-        reply_markup=get_main_menu(),
+        "🚀 ቦቱ ተመልሶ ሙሉ በሙሉ ስራ ጀምሯል!\n"
+        "ማከናወን የሚፈልጉትን አገልግሎት ከታች ካለው ሜኑ ይምረጡ፦",
+        reply_markup=get_main_reply_keyboard(),
         parse_mode="Markdown"
     )
 
-# 6. የቁልፎች እና የመሳሪያዎች ስራ አስኪያጅ (Callback Handler)
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
+# 6. የቻናል ማረጋገጫ Callback
+@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
+def callback_check_sub(call):
     chat_id = call.message.chat.id
-    data = call.data
-
-    if data == "check_sub":
-        if check_subscription(chat_id):
-            bot.answer_callback_query(call.id, "✅ ማረጋገጫው ተሳክቷል!")
-            try:
-                bot.delete_message(chat_id, call.message.message_id)
-            except:
-                pass
-            bot.send_message(
-                chat_id, 
-                "🎉 **እንኳን ደህና መጡ! NetX Tools ሙሉ በሙሉ ስራ ጀምሯል!**",
-                reply_markup=get_main_menu(),
-                parse_mode="Markdown"
-            )
-        else:
-            bot.answer_callback_query(call.id, "❌ እባክዎ በመጀመሪያ ቻናሎቹን ይቀላቀሉ!", show_alert=True)
-            
-    elif data == "tool_subdomain":
-        bot.answer_callback_query(call.id)
-        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_super_subdomain)
-
-    elif data == "tool_scanner":
-        bot.answer_callback_query(call.id)
-        msg = bot.send_message(chat_id, "📡 **Web Host Scanner**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `example.com`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_web_scanner)
-
-    elif data == "tool_recon":
-        bot.answer_callback_query(call.id)
-        msg = bot.send_message(chat_id, "🔍 **Domain & IP Recon**\n\nእባክዎ የ IP አድራሻ ወይም ዶሜይን ይላኩ:", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_ip_recon)
-
-    elif data == "tool_userinfo":
-        bot.answer_callback_query(call.id)
-        bot.send_message(chat_id, "ℹ️ የእርስዎ የቴሌግራም መረጃ:\n\n- User ID: `{}`\n- Name: `{}`".format(chat_id, call.from_user.first_name), parse_mode="Markdown", reply_markup=get_main_menu())
-
-    elif data == "tool_promo":
-        bot.answer_callback_query(call.id)
-        bot.send_message(chat_id, "📢 **PROMOTION MARKET**\n\nማስታወቂያዎችን እና የቻናል እድገት ፕሮግራሞችን ለማግኘት አድሚኑን ያነጋግሩ: @Admin", reply_markup=get_main_menu(), parse_mode="Markdown")
-
-    elif data == "tool_help":
-        bot.answer_callback_query(call.id)
-        bot.send_message(chat_id, "🆘 **እርዳታ እና አጠቃቀም**\n\nይህ ቦት ንዑስ ዶሜኖች (Subdomains)፣ የሰርቨር ፖርቶች እና የአይፒ መረጃዎችን በፍጥነት እንዲያገኙ ይረዳል።", reply_markup=get_main_menu(), parse_mode="Markdown")
-
+    if check_subscription(chat_id):
+        bot.answer_callback_query(call.id, "✅ ማረጋገጫው ተሳክቷል!")
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except:
+            pass
+        bot.send_message(
+            chat_id, 
+            "🎉 **እንኳን ደህና መጡ! NetX Tools ሙሉ በሙሉ ስራ ጀምሯል!**",
+            reply_markup=get_main_reply_keyboard(),
+            parse_mode="Markdown"
+        )
     else:
-        bot.answer_callback_query(call.id, "⚠️ ይህ መሳሪያ በዝግጅት ላይ ነው!", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ እባክዎ በመጀመሪያ ቻናሎቹን ይቀላቀሉ!", show_alert=True)
 
-# 7. 🌐 Subdomain Finder (Super Scan) Real Implementation
-def process_super_subdomain(message):
+# 7. የጽሁፍ ትእዛዞችን ማስተናገጃ (Menu Buttons Handler)
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def handle_menu_text(message):
     chat_id = message.chat.id
-    query = message.text.strip()
+    text = message.text.strip()
 
     if not check_subscription(chat_id):
         send_welcome(message)
         return
+
+    if text == "🌐 Subdomain Finder":
+        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_super_subdomain)
+
+    elif text == "📡 Web Host Scanner":
+        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Full Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `telegram.org`):", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_web_scanner)
+
+    elif text == "🔍 Domain & IP Recon":
+        msg = bot.send_message(chat_id, "🔍 **Domain & IP Recon**\n\nእባክዎ IP አድራሻ ወይም ዶሜይን ይላኩ:", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_ip_recon)
+
+    elif text == "🖼️ Image Info & Editor":
+        bot.send_message(chat_id, "🖼️ **Image Info & Editor**\n\nእባክዎ መረጃውን ማወቅ ወይም ጽሁፍ መፃፍ የሚፈልጉበትን ምስል (Photo) ይላኩ። ከምስሉ ጋር ጽሁፍ (Caption) ካካተቱ ምስሉ ላይ ይፃፋል!", parse_mode="Markdown")
+
+    elif text == "📢 PROMOTION MARKET":
+        bot.send_message(
+            chat_id, 
+            f"📢 **PROMOTION MARKET**\n\n"
+            f"ማስታወቂያዎችን፣ ቦቶችን እና የቻናል እድገት አገልግሎቶችን ለማግኘት ከታች ያለውን ሊንክ በመጫን ያነጋግሩ፦\n\n"
+            f"👤 **Admin Link:** {ADMIN_USERNAME}",
+            parse_mode="Markdown"
+        )
+
+    elif text == "🆘 Help / How to Use":
+        bot.send_message(
+            chat_id, 
+            "🆘 **እርዳታ እና አጠቃቀም**\n\n"
+            "• **Subdomain Finder:** የድረ-ገፆችን ንዑስ ዶሜይኖች ይፈልጋል።\n"
+            "• **Web Host Scanner:** የሆስቱን ሙሉ የኔትወርክ፣ የፖርት እና የ SSL ሰርተፊኬት መረጃ ይሰጣል።\n"
+            "• **Image Info & Editor:** የፎቶ መረጃዎችን ያወጣል፤ ጽሁፍም ይጽፋል።",
+            parse_mode="Markdown"
+        )
+    else:
+        bot.send_message(chat_id, "እባክዎ ከታች ካለው ሜኑ ውስጥ አንዱን ይምረጡ።", reply_markup=get_main_reply_keyboard())
+
+# 8. 🌐 Subdomain Finder
+def process_super_subdomain(message):
+    chat_id = message.chat.id
+    query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
 
     processing_msg = bot.send_message(chat_id, f"🔍 **Super Scan** በ `{query}` ላይ በመካሄድ ላይ ነው...", parse_mode="Markdown")
 
@@ -151,12 +160,12 @@ def process_super_subdomain(message):
                         if sub and not sub.startswith('*'):
                             subdomains.add(sub)
 
-            subdomain_list = sorted(list(subdomains))[:40]
+            subdomain_list = sorted(list(subdomains))[:35]
             
             if subdomain_list:
-                result_text = f"✅ **የተገኙ Super Scan ውጤቶች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
+                result_text = f"✅ **Super Scan ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
                 bot.delete_message(chat_id, processing_msg.message_id)
-                bot.send_message(chat_id, result_text, parse_mode="HTML", reply_markup=get_main_menu())
+                bot.send_message(chat_id, result_text, parse_mode="HTML")
             else:
                 bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id, parse_mode="Markdown")
         else:
@@ -164,83 +173,141 @@ def process_super_subdomain(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 8. 📡 Web Host Scanner Real Implementation
+# 9. 📡 Web Host Scanner (ሙሉ መረጃ)
 def process_web_scanner(message):
     chat_id = message.chat.id
     domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
 
-    if not check_subscription(chat_id):
-        send_welcome(message)
-        return
-
-    processing_msg = bot.send_message(chat_id, f"📡 **Web Host Scan** በ `{domain}` ላይ በመካሄድ ላይ ነው...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, f"📡 **ለ `{domain}` ሙሉ የሆስት ዳሰሳ በማካሄድ ላይ...**", parse_mode="Markdown")
 
     try:
         ip = socket.gethostbyname(domain)
-        ports = [80, 443, 8080, 8443]
+        check_ports = [80, 443, 8080, 8443, 21, 22, 53]
         open_ports = []
-
-        for port in ports:
+        for p in check_ports:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(2)
-            result = s.connect_ex((ip, port))
-            if result == 0:
-                open_ports.append(port)
+            s.settimeout(1.5)
+            if s.connect_ex((ip, p)) == 0:
+                open_ports.append(str(p))
             s.close()
 
-        # HTTP Status Check
-        http_status = "Unknown"
+        http_code = "N/A"
+        server_header = "N/A"
         try:
             r = requests.get(f"https://{domain}", timeout=5)
-            http_status = str(r.status_code)
+            http_code = f"{r.status_code} {r.reason}"
+            server_header = r.headers.get('Server', 'Hidden/Protected')
         except:
             try:
                 r = requests.get(f"http://{domain}", timeout=5)
-                http_status = str(r.status_code)
+                http_code = f"{r.status_code} {r.reason}"
+                server_header = r.headers.get('Server', 'Hidden/Protected')
             except:
-                http_status = "Connection Failed"
+                http_code = "Connection Timeout"
+
+        ssl_status = "No SSL / Failed"
+        try:
+            ctx = ssl.create_default_context()
+            with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
+                s.settimeout(4)
+                s.connect((domain, 443))
+                cert = s.getpeercert()
+                exp_date = cert['notAfter']
+                ssl_status = f"Valid (Expires: {exp_date[:11]})"
+        except:
+            pass
 
         report = (
-            f"📡 **Web Host Scan Report for:** `{domain}`\n\n"
-            f"🌐 **IP Address:** `{ip}`\n"
-            f"🔓 **Open Ports:** `{open_ports if open_ports else 'None'}`\n"
-            f"🌐 **HTTP Status:** `{http_status}`"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📡 **WEB HOST SCANNER REPORT**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🌐 **Target Host:** `{domain}`\n"
+            f"📌 **IP Address:** `{ip}`\n"
+            f"🔓 **Open Ports:** `{', '.join(open_ports) if open_ports else 'None'}`\n"
+            f"⚙️ **Server Header:** `{server_header}`\n"
+            f"🚦 **HTTP Status:** `{http_code}`\n"
+            f"🔒 **SSL/TLS Status:** `{ssl_status}`\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━"
         )
         bot.delete_message(chat_id, processing_msg.message_id)
-        bot.send_message(chat_id, report, parse_mode="Markdown", reply_markup=get_main_menu())
+        bot.send_message(chat_id, report, parse_mode="Markdown")
     except Exception as e:
-        bot.edit_message_text(f"❌ ስህተት ተፈጥሯል ወይም ሆስቱ አልተገኘም: {e}", chat_id, processing_msg.message_id)
+        bot.edit_message_text(f"❌ ስህተት ተፈጥሯል (ሆስቱ አልተገኘም): {e}", chat_id, processing_msg.message_id)
 
-# 9. 🔍 Domain & IP Recon Real Implementation
+# 10. 🔍 Domain & IP Recon
 def process_ip_recon(message):
     chat_id = message.chat.id
     target = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
 
-    if not check_subscription(chat_id):
-        send_welcome(message)
-        return
-
     try:
         ip = socket.gethostbyname(target)
-        api_url = f"http://ip-api.com/json/{ip}"
-        res = requests.get(api_url, timeout=5).json()
+        res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
 
         if res.get('status') == 'success':
             text = (
-                f"🔍 **IP Recon Result:**\n\n"
+                f"🔍 **IP Recon Report:**\n\n"
                 f"📌 **Target:** `{target}`\n"
                 f"🌐 **IP:** `{ip}`\n"
                 f"🌍 **Country:** `{res.get('country')}`\n"
                 f"🏙️ **City:** `{res.get('city')}`\n"
                 f"🏢 **ISP:** `{res.get('isp')}`"
             )
-            bot.send_message(chat_id, text, parse_mode="Markdown", reply_markup=get_main_menu())
+            bot.send_message(chat_id, text, parse_mode="Markdown")
         else:
-            bot.send_message(chat_id, f"⚠️ መረጃ ማግኘት አልተቻለም። IP: `{ip}`", parse_mode="Markdown", reply_markup=get_main_menu())
+            bot.send_message(chat_id, f"⚠️ መረጃ ማግኘት አልተቻለም። IP: `{ip}`", parse_mode="Markdown")
     except Exception as e:
-        bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}", reply_markup=get_main_menu())
+        bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
 
-# 10. Flask Server for Render
+# 11. 🖼️ Image Info & Editor
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    chat_id = message.chat.id
+
+    if not check_subscription(chat_id):
+        send_welcome(message)
+        return
+
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        image = Image.open(io.BytesIO(downloaded_file))
+        width, height = image.size
+        format_type = image.format
+        file_size_kb = round(len(downloaded_file) / 1024, 2)
+
+        caption_text = message.caption
+        if caption_text:
+            draw = ImageDraw.Draw(image)
+            text_position = (20, height - 60)
+            draw.text(text_position, caption_text, fill=(255, 255, 255))
+            
+            output_io = io.BytesIO()
+            image.save(output_io, format='JPEG')
+            output_io.seek(0)
+
+            info_msg = (
+                f"🖼️ **Image Edit Success!**\n\n"
+                f"📐 **Resolution:** `{width}x{height}`\n"
+                f"📁 **Format:** `{format_type}`\n"
+                f"📦 **Size:** `{file_size_kb} KB`\n"
+                f"✍️ **Added Text:** `{caption_text}`"
+            )
+            bot.send_photo(chat_id, output_io, caption=info_msg, parse_mode="Markdown")
+        else:
+            info_msg = (
+                f"🖼️ **Image Info Analysis:**\n\n"
+                f"📐 **Resolution:** `{width}x{height}` px\n"
+                f"📁 **Format:** `{format_type}`\n"
+                f"📦 **Size:** `{file_size_kb} KB`\n\n"
+                f"💡 *ምስሉ ላይ ጽሁፍ ለመጻፍ ከፎቶው ጋር Caption/ጽሁፍ አያይዘው ይላኩ!*"
+            )
+            bot.send_message(chat_id, info_msg, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ የምስል ስህተት: {e}")
+
+# 12. Flask Server for Render
 app = Flask('')
 
 @app.route('/')
