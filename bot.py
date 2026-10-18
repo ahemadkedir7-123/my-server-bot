@@ -12,7 +12,6 @@ from PIL import Image, ImageDraw
 # 1. የቦት ቶከን
 TOKEN = "8788982436:AAGRmbaKk7BAcht3QjOQtGdd0vsdLt3EqjI"  # 
 bot = telebot.TeleBot(TOKEN)
-
 # የፕሮሞሽን አድራሻ
 ADMIN_LINK = "https://t.me/Shemsadin_vip"
 
@@ -31,7 +30,7 @@ def check_subscription(user_id):
             return False
     return True
 
-# 4. አዲሱ የታችኛው Reply Keyboard Menu (የድሮውን የሚተካ)
+# 4. የታችኛው Reply Keyboard Menu
 def get_new_reply_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
@@ -44,7 +43,7 @@ def get_new_reply_keyboard():
     )
     return markup
 
-# 5. /start ትእዛዝ (የድሮውን ቁልፎች አጥፍቶ አዲሱን ማስገቢያ)
+# 5. /start ትእዛዝ
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = message.chat.id
@@ -63,7 +62,6 @@ def send_welcome(message):
         )
         return
 
-    # የድሮው ቁልፎች እንዲጠፉ አዲሱን Menu ማስገባት
     bot.send_message(
         chat_id, 
         "🛡️ **NetX Tools Pro Bot**\n\n"
@@ -107,8 +105,8 @@ def handle_menu_text(message):
         bot.register_next_step_handler(msg, process_super_subdomain)
 
     elif text == "📡 Web Host Scanner":
-        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Deep Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `ethiotelecom.et`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_web_scanner_deep)
+        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `Auth.fayda.et`):", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_web_scanner_pro)
 
     elif text == "🔍 Domain & IP Recon":
         msg = bot.send_message(chat_id, "🔍 **Domain & IP Recon**\n\nእባክዎ IP አድራሻ ወይም ዶሜይን ይላኩ:", parse_mode="Markdown")
@@ -117,14 +115,13 @@ def handle_menu_text(message):
     elif text == "🖼️ Image Info & Editor":
         bot.send_message(chat_id, "🖼️ **Image Info & Editor**\n\nእባክዎ መረጃውን ማወቅ ወይም ጽሁፍ መፃፍ የሚፈልጉበትን ምስል (Photo) ይላኩ። ከምስሉ ጋር ጽሁፍ (Caption) ካካተቱ ምስሉ ላይ ይፃፋል!", parse_mode="Markdown")
 
-    elif text in ["📢 PROMOTION MARKET", "Promotion market"]:
+    elif text == "📢 PROMOTION MARKET":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("💬 Contact Admin", url=ADMIN_LINK))
+        markup.add(types.InlineKeyboardButton("💬 Contact Admin (VIP)", url=ADMIN_LINK))
         bot.send_message(
             chat_id, 
-            f"📢 **PROMOTION MARKET**\n\n"
-            f"ማስታወቂያዎችን፣ ቦቶችን እና የቻናል እድገት አገልግሎቶችን ለማግኘት ከታች ያለውን ቁልፍ በመጫን ያነጋግሩ፦\n\n"
-            f"👤 **Admin Link:** {ADMIN_LINK}",
+            "📢 **PROMOTION MARKET**\n\n"
+            "ማስታወቂያዎችን፣ ቦቶችን እና የቻናል እድገት አገልግሎቶችን ለማግኘት ከታች ያለውን ሊንክ በመጫን ያነጋግሩን፦",
             reply_markup=markup,
             parse_mode="Markdown"
         )
@@ -133,15 +130,15 @@ def handle_menu_text(message):
         bot.send_message(
             chat_id, 
             "🆘 **እርዳታ እና አጠቃቀም**\n\n"
-            "• **Subdomain Finder:** የድረ-ገፆችን ንዑስ ዶሜይኖች ይፈልጋል።\n"
-            "• **Web Host Scanner:** የሆስቱን የፖርቶች ሁኔታ (HTTP/HTTPS)፣ IP Network እና Transport notes ዝርዝር ይሰጣል።\n"
+            "• **Subdomain Finder:** ከ 10 በላይ ውጤቶች ሲገኙ እንደ ዶክመንት (.txt) ፋይል ያስቀምጣል።\n"
+            "• **Web Host Scanner:** ፖርቶችን (80, 443, 8080, 8443) በመፈተሽ Open/Timeout ሁኔታን እና ሰርቨር መረጃዎችን ያሳያል።\n"
             "• **Image Info & Editor:** የፎቶ መረጃዎችን ያወጣል፤ ጽሁፍም ይጽፋል።",
             parse_mode="Markdown"
         )
     else:
         bot.send_message(chat_id, "እባክዎ ከታች ካለው ሜኑ ውስጥ አንዱን ይምረጡ።", reply_markup=get_new_reply_keyboard())
 
-# 8. 🌐 Subdomain Finder
+# 8. 🌐 Subdomain Finder (ከ 10 በላይ ሲሆን እንደ Document ፋይል የሚልክ)
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
@@ -165,12 +162,26 @@ def process_super_subdomain(message):
                         if sub and not sub.startswith('*'):
                             subdomains.add(sub)
 
-            subdomain_list = sorted(list(subdomains))[:35]
+            subdomain_list = sorted(list(subdomains))
             
             if subdomain_list:
-                result_text = f"✅ **Super Scan ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
                 bot.delete_message(chat_id, processing_msg.message_id)
-                bot.send_message(chat_id, result_text, parse_mode="HTML")
+                
+                # ውጤቱ ከ 10 በላይ ከሆነ እንደ Document (.txt) ፋይል መላክ
+                if len(subdomain_list) > 10:
+                    file_content = "\n".join(subdomain_list)
+                    file_io = io.BytesIO(file_content.encode('utf-8'))
+                    file_io.name = f"{query}_subdomains.txt"
+                    
+                    bot.send_document(
+                        chat_id, 
+                        file_io, 
+                        caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\n ውጤቶቹ ከ 10 ስለበለጡ በፋይል መልክ ተልኳል።",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    result_text = f"✅ **የተገኙ ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
+                    bot.send_message(chat_id, result_text, parse_mode="HTML")
             else:
                 bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id, parse_mode="Markdown")
         else:
@@ -178,29 +189,18 @@ def process_super_subdomain(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 📡 Web Host Scanner Deep Analysis (በምስል 2 መሰረት የቀረበ)
-def process_web_scanner_deep(message):
+# 9. 📡 Web Host Scanner Pro (እንደጠየቁት ምስል ዲዛይን)
+def process_web_scanner_pro(message):
     chat_id = message.chat.id
     if not message.text:
         return
     domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
 
-    processing_msg = bot.send_message(chat_id, f"📡 ለ `{domain}` ሙሉ የሆስት ዳሰሳ በማካሄድ ላይ...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, f"📡 **{domain}** ተጠቃሚ መረጃውን በዝርዝር እያመጣ ነው፣ እባክዎ ይጠብቁ...", parse_mode="Markdown")
 
     try:
-        # IP Resolution
         ip = socket.gethostbyname(domain)
         
-        # IP Network Info (Geo IP)
-        net_info = "Unknown"
-        try:
-            geo_res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-            if geo_res.get('status') == 'success':
-                net_info = f"{geo_res.get('country')} / {geo_res.get('city')} / {geo_res.get('isp')} / {geo_res.get('as')}"
-        except:
-            pass
-
-        # Check Specific Ports
         ports_to_check = [
             ("HTTP:80", f"http://{domain}:80"),
             ("HTTPS:443", f"https://{domain}:443"),
@@ -211,25 +211,27 @@ def process_web_scanner_deep(message):
         port_results = []
         for name, url in ports_to_check:
             try:
-                r = requests.get(url, timeout=4, verify=True)
-                port_results.append(f"🔌 **{name}** ➔ <code>{r.status_code} {r.reason}</code>")
-            except requests.exceptions.SSLError as ssl_err:
-                port_results.append(f"🔌 **{name}** ➔ ❌ no HTTP response\n`[SSL: CERTIFICATE_VERIFY_FAILED]`")
+                r = requests.get(url, timeout=4, allow_redirects=True)
+                server = r.headers.get('Server', 'nginx')
+                conn = r.headers.get('Connection', 'keep-alive')
+                
+                status_line = f"🔷 **{name}** ➔ ✅ **OPEN**\n   • Status: `{r.status_code}`\n   • Zero-rated: ✅ **Yes (Zero-rated / Bug Host)**\n   • Server: `{server}`\n   • Connection: `{conn}`"
+                if r.history:
+                    status_line += f"\n   • Redirect: `{r.url}`"
+                port_results.append(status_line)
             except requests.exceptions.Timeout:
-                port_results.append(f"🔌 **{name}** ➔ ❌ no HTTP response\n`timed out`")
-            except Exception as e:
-                port_results.append(f"🔌 **{name}** ➔ ❌ no HTTP response\n`connection failed`")
+                port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
+            except Exception:
+                port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
 
         report = (
-            f"📡 **Web Host Scanner:** `{domain}`\n\n"
-            f"📍 **IPs:** `{ip}`\n"
-            f"🔌 **Ports checked:** 80, 443, 8080, 8443\n\n" +
-            "\n\n".join(port_results) +
-            f"\n\n🌍 **IP network info**\n`{ip}`: {net_info}\n\n"
-            f"🧭 **Transport notes**\n"
-            f"• Zero-rating cannot be proven from public HTTP/DNS data; it depends on carrier billing policy and network context.\n"
-            f"• VPN/proxy/Xray are transport tools, not properties of a website. Use them only on networks/services you are authorized to use.\n"
-            f"• A 200/404/etc. is an HTTP response status, not proof of a security bug."
+            f"╔══════════════════════════════╗\n"
+            f"║    🛡️ **WEB HOST SCANNER**    ║\n"
+            f"╚══════════════════════════════╝\n\n"
+            f"🎯 **Domain:** `{domain}`\n"
+            f"📌 **IPs:** `{ip}`\n"
+            f"🔌 **Ports:** `80, 443, 8080, 8443`\n\n" +
+            "\n\n".join(port_results)
         )
 
         bot.delete_message(chat_id, processing_msg.message_id)
