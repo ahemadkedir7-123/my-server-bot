@@ -101,11 +101,11 @@ def handle_menu_text(message):
         return
 
     if text == "🌐 Subdomain Finder":
-        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
+        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: ``):", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_super_subdomain)
 
     elif text == "📡 Web Host Scanner":
-        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `Auth.fayda.et`):", parse_mode="Markdown")
+        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: ``):", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_web_scanner_pro)
 
     elif text == "🔍 Domain & IP Recon":
