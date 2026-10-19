@@ -31,7 +31,7 @@ def check_subscription(user_id):
             return False
     return True
 
-# 4. የታችኛው Reply Keyboard Menu (አዲሱን DNS Lookup ጨምሮ)
+# 4. የታችኛው Reply Keyboard Menu
 def get_new_reply_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
@@ -114,8 +114,8 @@ def handle_menu_text(message):
     elif text == "📁 Bulk Bug Host Checker (.txt)":
         bot.send_message(
             chat_id, 
-            "📁 **Bulk Bug Host Checker (.txt)**\n\n"
-            "እባክዎ በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ሁሉንም በአንድ ላይ ስካን አድርጎ ለ **Ethio Telecom** እና ለ **Safaricom** ነፃ (Zero-rated) ሊሆኑ የሚችሉትን ለይቶ ያሳውቅዎታል።", 
+            "📁 **Bulk Bug Host Scanner (.txt)**\n\n"
+            "እባክዎ **ያለ ምንም ገደብ** በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ሁሉንም በአንድ ላይ ስካን አድርጎ ለ **Ethio Telecom** እና ለ **Safaricom** ነፃ (Zero-rated) ሊሆኑ የሚችሉትን ለይቶ ያሳውቅዎታል።", 
             parse_mode="Markdown"
         )
 
@@ -146,15 +146,14 @@ def handle_menu_text(message):
             chat_id, 
             "🆘 **እርዳታ እና አጠቃቀም**\n\n"
             "• **Subdomain Finder:** ከ 10 በላይ ውጤቶች ሲገኙ እንደ ዶክመንት (.txt) ፋይል ያስቀምጣል።\n"
-            "• **Bulk Bug Host Checker:** የ `.txt` ፋይል ተቀብሎ በርካታ Bug Host ዶሜይኖችን ለ Ethio Telecom እና Safaricom ለይቶ ይቃኛል።\n"
-            "• **DNS Lookup:** የዶሜይኑን የአይፒ እና የዲ ኤን ኤስ መረጃ ያወጣል።\n"
-            "• **Web Host Scanner:** ፖርቶችን (80, 443, 8080, 8443) በመፈተሽ Open/Timeout ሁኔታን ያሳያል።",
+            "• **Bulk Bug Host Checker:** የ `.txt` ፋይል ያለ ገደብ (Unlimited) ተቀብሎ Bug Host ዶሜይኖችን ለ Ethio Telecom እና Safaricom ይቃኛል።\n"
+            "• **DNS Lookup:** የዶሜይኑን የአይፒ እና የዲ ኤን ኤስ መረጃ ያወጣል።",
             parse_mode="Markdown"
         )
     else:
         bot.send_message(chat_id, "እባክዎ ከታች ካለው ሜኑ ውስጥ አንዱን ይምረጡ።", reply_markup=get_new_reply_keyboard())
 
-# 8. 📁 Bulk Bug Host Checker ከ .txt ፋይል ተቀብሎ መቃኛ
+# 8. 📁 Bulk Bug Host Checker (ያለ ምንም ገደብ)
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     chat_id = message.chat.id
@@ -167,7 +166,7 @@ def handle_document(message):
         bot.send_message(chat_id, "⚠️ እባክዎ የ **`.txt`** ፋይል ብቻ ይላኩ!")
         return
 
-    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደና ዶሜይኖቹ እየተቃኙ ነው... እባክዎ ትንሽ ይጠብቁ...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደ እና ሁሉም ዶሜይኖች ያለ ገደብ እየተቃኙ ነው... እባክዎ ትንሽ ይጠብቁ...", parse_mode="Markdown")
 
     try:
         file_info = bot.get_file(message.document.file_id)
@@ -177,7 +176,7 @@ def handle_document(message):
         domains = [line.strip().replace("https://", "").replace("http://", "").split("/")[0] 
                    for line in content.splitlines() if line.strip()]
 
-        domains = list(set(domains))[:50]
+        domains = list(set(domains))
 
         if not domains:
             bot.edit_message_text("⚠️ በፋይሉ ውስጥ ምንም ትክክለኛ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id)
@@ -208,7 +207,7 @@ def handle_document(message):
             except:
                 continue
 
-        report = f"📊 **BULK BUG HOST SCAN REPORT**\n\n"
+        report = f"📊 **BULK BUG HOST SCAN REPORT (UNLIMITED)**\n\n"
         report += f"Total Scanned Domains: `{len(domains)}`\n\n"
 
         if ethio_telecom_hosts:
@@ -222,15 +221,89 @@ def handle_document(message):
             report += "🔴 **Safaricom:** ምንም ነፃ ሆስት አልተገኘም\n\n"
 
         if other_working_hosts:
-            report += "🌐 **Other Active Hosts (Global CDN/Cloud):**\n" + "\n".join(other_working_hosts[:15])
+            report += "🌐 **Other Active Hosts:**\n" + "\n".join(other_working_hosts[:30])
 
         bot.delete_message(chat_id, processing_msg.message_id)
-        bot.send_message(chat_id, report, parse_mode="Markdown")
+        
+        if len(report) > 4000:
+            file_io = io.BytesIO(report.encode('utf-8'))
+            file_io.name = "scan_report.txt"
+            bot.send_document(chat_id, file_io, caption="✅ **የስካን ሪፖርት ፋይል (ውጤቱ ስለረዘመ በሰነድ መልክ ተልኳል)**", parse_mode="Markdown")
+        else:
+            bot.send_message(chat_id, report, parse_mode="Markdown")
 
     except Exception as e:
         bot.edit_message_text(f"❌ ፋይሉን በማንበብ ላይ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 🔍 DNS Lookup Handler
+# 9. 🌐 Subdomain Finder (የተስተካከለ አስተማማኝ አሰራር - ያለ መቆራረጥ)
+def process_super_subdomain(message):
+    chat_id = message.chat.id
+    if not message.text:
+        return
+    query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
+
+    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ንዑስ-ዶሜይኖች በመሰብሰብ ላይ...", parse_mode="Markdown")
+
+    subdomains = set()
+    
+    # ዘዴ 1: ከ crt.sh በ JSON API ማውጣት
+    try:
+        url = f"https://crt.sh/?q=%25.{query}&output=json"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            for entry in data:
+                name_value = entry.get('name_value')
+                if name_value:
+                    for sub in name_value.split('\n'):
+                        sub = sub.strip()
+                        if sub and not sub.startswith('*'):
+                            subdomains.add(sub)
+    except:
+        pass
+
+    # ዘዴ 2: ሰርቨሩ ካልሰራ በ HackerTarget API አማራጭ ድጋፍ (ፈጣን እና አስተማማኝ)
+    if not subdomains:
+        try:
+            alt_url = f"https://api.hackertarget.com/hostsearch/?q={query}"
+            res = requests.get(alt_url, timeout=10)
+            if res.status_code == 200 and "API count exceeded" not in res.text:
+                for line in res.text.splitlines():
+                    parts = line.split(',')
+                    if len(parts) > 0:
+                        sub = parts[0].strip()
+                        if sub:
+                            subdomains.add(sub)
+        except:
+            pass
+
+    try:
+        subdomain_list = sorted(list(subdomains))
+        
+        if subdomain_list:
+            bot.delete_message(chat_id, processing_msg.message_id)
+            
+            if len(subdomain_list) > 10:
+                file_content = "\n".join(subdomain_list)
+                file_io = io.BytesIO(file_content.encode('utf-8'))
+                file_io.name = f"{query}_subdomains.txt"
+                
+                bot.send_document(
+                    chat_id, 
+                    file_io, 
+                    caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\n ውጤቶቹ ከ 10 ስለበለጡ በፋይል መልክ ተልኳል።",
+                    parse_mode="Markdown"
+                )
+            else:
+                result_text = f"✅ **የተገኙ ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
+                bot.send_message(chat_id, result_text, parse_mode="HTML")
+        else:
+            bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id, parse_mode="Markdown")
+    except Exception as e:
+        bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
+
+# 10. 🔍 DNS Lookup Handler
 def process_dns_lookup(message):
     chat_id = message.chat.id
     if not message.text:
@@ -241,7 +314,6 @@ def process_dns_lookup(message):
 
     try:
         ip = socket.gethostbyname(domain)
-        # ተጨማሪ የ IP ጂኦግራፊ መረጃ
         geo_res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
         
         result = (
@@ -257,56 +329,6 @@ def process_dns_lookup(message):
         bot.send_message(chat_id, result, parse_mode="Markdown")
     except Exception as e:
         bot.edit_message_text(f"❌ የዲ ኤን ኤስ መረጃ ማግኘት አልተቻለም: {e}", chat_id, processing_msg.message_id)
-
-# 10. 🌐 Subdomain Finder
-def process_super_subdomain(message):
-    chat_id = message.chat.id
-    if not message.text:
-        return
-    query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-
-    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ንዑስ-ዶሜይኖች በመሰብሰብ ላይ...", parse_mode="Markdown")
-
-    try:
-        url = f"https://crt.sh/?q=%25.{query}&output=json"
-        response = requests.get(url, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            subdomains = set()
-            for entry in data:
-                name_value = entry.get('name_value')
-                if name_value:
-                    for sub in name_value.split('\n'):
-                        sub = sub.strip()
-                        if sub and not sub.startswith('*'):
-                            subdomains.add(sub)
-
-            subdomain_list = sorted(list(subdomains))
-            
-            if subdomain_list:
-                bot.delete_message(chat_id, processing_msg.message_id)
-                
-                if len(subdomain_list) > 10:
-                    file_content = "\n".join(subdomain_list)
-                    file_io = io.BytesIO(file_content.encode('utf-8'))
-                    file_io.name = f"{query}_subdomains.txt"
-                    
-                    bot.send_document(
-                        chat_id, 
-                        file_io, 
-                        caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\n ውጤቶቹ ከ 10 ስለበለጡ በፋይል መልክ ተልኳል።",
-                        parse_mode="Markdown"
-                    )
-                else:
-                    result_text = f"✅ **የተገኙ ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
-                    bot.send_message(chat_id, result_text, parse_mode="HTML")
-            else:
-                bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id, parse_mode="Markdown")
-        else:
-            bot.edit_message_text("⚠️ ከሰርቨሩ ጋር ግንኙነት መፍጠር አልተቻለም።", chat_id, processing_msg.message_id)
-    except Exception as e:
-        bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
 # 11. 📡 Web Host Scanner Pro
 def process_web_scanner_pro(message):
