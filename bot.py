@@ -10,8 +10,9 @@ from telebot import types
 from PIL import Image, ImageDraw
 
 # 1. የቦት ቶከን
-TOKEN = "8788982436:AAGRmbaKk7BAcht3QjOQtGdd0vsdLt3EqjI"  # 
+TOKEN = "8788982436:AAGmN5BJNVn7xqBBKpFlu4ZFFPjOXl2cjdc"
 bot = telebot.TeleBot(TOKEN)
+
 # የፕሮሞሽን አድራሻ
 ADMIN_LINK = "https://t.me/Shemsadin_vip"
 
@@ -30,12 +31,14 @@ def check_subscription(user_id):
             return False
     return True
 
-# 4. የታችኛው Reply Keyboard Menu
+# 4. የታችኛው Reply Keyboard Menu (አዲሱን DNS Lookup ጨምሮ)
 def get_new_reply_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
         types.KeyboardButton("🌐 Subdomain Finder"),
         types.KeyboardButton("📡 Web Host Scanner"),
+        types.KeyboardButton("📁 Bulk Bug Host Checker (.txt)"),
+        types.KeyboardButton("🔍 DNS Lookup"),
         types.KeyboardButton("🔍 Domain & IP Recon"),
         types.KeyboardButton("🖼️ Image Info & Editor"),
         types.KeyboardButton("📢 PROMOTION MARKET"),
@@ -101,12 +104,24 @@ def handle_menu_text(message):
         return
 
     if text == "🌐 Subdomain Finder":
-        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: ``):", parse_mode="Markdown")
+        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_super_subdomain)
 
     elif text == "📡 Web Host Scanner":
-        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: ``):", parse_mode="Markdown")
+        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `Auth.fayda.et`):", parse_mode="Markdown")
         bot.register_next_step_handler(msg, process_web_scanner_pro)
+
+    elif text == "📁 Bulk Bug Host Checker (.txt)":
+        bot.send_message(
+            chat_id, 
+            "📁 **Bulk Bug Host Checker (.txt)**\n\n"
+            "እባክዎ በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ሁሉንም በአንድ ላይ ስካን አድርጎ ለ **Ethio Telecom** እና ለ **Safaricom** ነፃ (Zero-rated) ሊሆኑ የሚችሉትን ለይቶ ያሳውቅዎታል።", 
+            parse_mode="Markdown"
+        )
+
+    elif text == "🔍 DNS Lookup":
+        msg = bot.send_message(chat_id, "🔍 **DNS Lookup**\n\nእባክዎ የዲ ኤን ኤስ መረጃ ማግኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
+        bot.register_next_step_handler(msg, process_dns_lookup)
 
     elif text == "🔍 Domain & IP Recon":
         msg = bot.send_message(chat_id, "🔍 **Domain & IP Recon**\n\nእባክዎ IP አድራሻ ወይም ዶሜይን ይላኩ:", parse_mode="Markdown")
@@ -131,14 +146,119 @@ def handle_menu_text(message):
             chat_id, 
             "🆘 **እርዳታ እና አጠቃቀም**\n\n"
             "• **Subdomain Finder:** ከ 10 በላይ ውጤቶች ሲገኙ እንደ ዶክመንት (.txt) ፋይል ያስቀምጣል።\n"
-            "• **Web Host Scanner:** ፖርቶችን (80, 443, 8080, 8443) በመፈተሽ Open/Timeout ሁኔታን እና ሰርቨር መረጃዎችን ያሳያል።\n"
-            "• **Image Info & Editor:** የፎቶ መረጃዎችን ያወጣል፤ ጽሁፍም ይጽፋል።",
+            "• **Bulk Bug Host Checker:** የ `.txt` ፋይል ተቀብሎ በርካታ Bug Host ዶሜይኖችን ለ Ethio Telecom እና Safaricom ለይቶ ይቃኛል።\n"
+            "• **DNS Lookup:** የዶሜይኑን የአይፒ እና የዲ ኤን ኤስ መረጃ ያወጣል።\n"
+            "• **Web Host Scanner:** ፖርቶችን (80, 443, 8080, 8443) በመፈተሽ Open/Timeout ሁኔታን ያሳያል።",
             parse_mode="Markdown"
         )
     else:
         bot.send_message(chat_id, "እባክዎ ከታች ካለው ሜኑ ውስጥ አንዱን ይምረጡ።", reply_markup=get_new_reply_keyboard())
 
-# 8. 🌐 Subdomain Finder (ከ 10 በላይ ሲሆን እንደ Document ፋይል የሚልክ)
+# 8. 📁 Bulk Bug Host Checker ከ .txt ፋይል ተቀብሎ መቃኛ
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    chat_id = message.chat.id
+
+    if not check_subscription(chat_id):
+        send_welcome(message)
+        return
+
+    if not message.document.file_name.endswith('.txt'):
+        bot.send_message(chat_id, "⚠️ እባክዎ የ **`.txt`** ፋይል ብቻ ይላኩ!")
+        return
+
+    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደና ዶሜይኖቹ እየተቃኙ ነው... እባክዎ ትንሽ ይጠብቁ...", parse_mode="Markdown")
+
+    try:
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        content = downloaded_file.decode('utf-8', errors='ignore')
+
+        domains = [line.strip().replace("https://", "").replace("http://", "").split("/")[0] 
+                   for line in content.splitlines() if line.strip()]
+
+        domains = list(set(domains))[:50]
+
+        if not domains:
+            bot.edit_message_text("⚠️ በፋይሉ ውስጥ ምንም ትክክለኛ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id)
+            return
+
+        ethio_telecom_hosts = []
+        safaricom_hosts = []
+        other_working_hosts = []
+
+        for domain in domains:
+            try:
+                ip = socket.gethostbyname(domain)
+                geo_res = requests.get(f"http://ip-api.com/json/{ip}", timeout=3).json()
+                isp = geo_res.get('isp', '').lower()
+                org = geo_res.get('org', '').lower()
+                as_info = geo_res.get('as', '').lower()
+
+                r = requests.get(f"http://{domain}", timeout=3, allow_redirects=True)
+                if r.status_code in [200, 301, 302, 204]:
+                    host_info = f"• `http://{domain}` (IP: `{ip}`)"
+
+                    if "ethio" in isp or "ethio" in org or "as24757" in as_info:
+                        ethio_telecom_hosts.append(host_info)
+                    elif "safaricom" in isp or "safaricom" in org or "as328604" in as_info:
+                        safaricom_hosts.append(host_info)
+                    else:
+                        other_working_hosts.append(host_info)
+            except:
+                continue
+
+        report = f"📊 **BULK BUG HOST SCAN REPORT**\n\n"
+        report += f"Total Scanned Domains: `{len(domains)}`\n\n"
+
+        if ethio_telecom_hosts:
+            report += "🇪🇹 **Working For Ethio Telecom:**\n" + "\n".join(ethio_telecom_hosts) + "\n\n"
+        else:
+            report += "🇪🇹 **Ethio Telecom:** ምንም ነፃ ሆስት አልተገኘም\n\n"
+
+        if safaricom_hosts:
+            report += "🔴 **Working For Safaricom:**\n" + "\n".join(safaricom_hosts) + "\n\n"
+        else:
+            report += "🔴 **Safaricom:** ምንም ነፃ ሆስት አልተገኘም\n\n"
+
+        if other_working_hosts:
+            report += "🌐 **Other Active Hosts (Global CDN/Cloud):**\n" + "\n".join(other_working_hosts[:15])
+
+        bot.delete_message(chat_id, processing_msg.message_id)
+        bot.send_message(chat_id, report, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.edit_message_text(f"❌ ፋይሉን በማንበብ ላይ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
+
+# 9. 🔍 DNS Lookup Handler
+def process_dns_lookup(message):
+    chat_id = message.chat.id
+    if not message.text:
+        return
+    domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
+
+    processing_msg = bot.send_message(chat_id, f"🔍 የ `{domain}` ዲ ኤን ኤስ መረጃ በመፈለግ ላይ...", parse_mode="Markdown")
+
+    try:
+        ip = socket.gethostbyname(domain)
+        # ተጨማሪ የ IP ጂኦግራፊ መረጃ
+        geo_res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+        
+        result = (
+            f"🔍 **DNS LOOKUP RESULT**\n\n"
+            f"📌 **Domain:** `{domain}`\n"
+            f"🌐 **Resolved IP:** `{ip}`\n"
+            f"🌍 **Country:** `{geo_res.get('country', 'N/A')}`\n"
+            f"🏙️ **City:** `{geo_res.get('city', 'N/A')}`\n"
+            f"🏢 **ISP/Org:** `{geo_res.get('isp', 'N/A')}`\n"
+            f"📡 **ASN:** `{geo_res.get('as', 'N/A')}`"
+        )
+        bot.delete_message(chat_id, processing_msg.message_id)
+        bot.send_message(chat_id, result, parse_mode="Markdown")
+    except Exception as e:
+        bot.edit_message_text(f"❌ የዲ ኤን ኤስ መረጃ ማግኘት አልተቻለም: {e}", chat_id, processing_msg.message_id)
+
+# 10. 🌐 Subdomain Finder
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
@@ -167,7 +287,6 @@ def process_super_subdomain(message):
             if subdomain_list:
                 bot.delete_message(chat_id, processing_msg.message_id)
                 
-                # ውጤቱ ከ 10 በላይ ከሆነ እንደ Document (.txt) ፋይል መላክ
                 if len(subdomain_list) > 10:
                     file_content = "\n".join(subdomain_list)
                     file_io = io.BytesIO(file_content.encode('utf-8'))
@@ -189,7 +308,7 @@ def process_super_subdomain(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 📡 Web Host Scanner Pro (እንደጠየቁት ምስል ዲዛይን)
+# 11. 📡 Web Host Scanner Pro
 def process_web_scanner_pro(message):
     chat_id = message.chat.id
     if not message.text:
@@ -219,9 +338,7 @@ def process_web_scanner_pro(message):
                 if r.history:
                     status_line += f"\n   • Redirect: `{r.url}`"
                 port_results.append(status_line)
-            except requests.exceptions.Timeout:
-                port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
-            except Exception:
+            except:
                 port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
 
         report = (
@@ -240,7 +357,7 @@ def process_web_scanner_pro(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል (ሆስቱ አልተገኘም): {e}", chat_id, processing_msg.message_id)
 
-# 10. 🔍 Domain & IP Recon
+# 12. 🔍 Domain & IP Recon
 def process_ip_recon(message):
     chat_id = message.chat.id
     if not message.text:
@@ -266,13 +383,12 @@ def process_ip_recon(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
 
-# 11. 🖼️ Image Info & Editor
+# 13. 🖼️ Image Info & Editor
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     chat_id = message.chat.id
 
     if not check_subscription(chat_id):
-        send_welcome(message)
         return
 
     try:
@@ -315,7 +431,7 @@ def handle_photo(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ የምስል ስህተት: {e}")
 
-# 12. Flask Server for Render
+# 14. Flask Server for Render
 app = Flask('')
 
 @app.route('/')
