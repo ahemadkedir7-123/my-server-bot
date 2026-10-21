@@ -10,7 +10,7 @@ from telebot import types
 from PIL import Image, ImageDraw
 
 # 1. የቦት ቶከን
-TOKEN = "8788982436:AAGmN5BJNVn7xqBBKpFlu4ZFFPjOXl2cjdc"
+TOKEN = "8788982436:AAHCZmgmksgz0EYg6vOqRd1Kk9Q4SOkPPnI"
 bot = telebot.TeleBot(TOKEN)
 
 # የፕሮሞሽን አድራሻ
