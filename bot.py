@@ -22,6 +22,10 @@ from flask import Flask, jsonify
 TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
 bot = telebot.TeleBot(TOKEN)
 
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
 
 logging.basicConfig(
     level=logging.INFO,
