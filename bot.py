@@ -463,5 +463,6 @@ def handle_photo(message):
             )
             bot.send_message(chat_id, info_msg, parse_mode="Markdown")
 
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ 
+        except Exception as e:
+        bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
+
