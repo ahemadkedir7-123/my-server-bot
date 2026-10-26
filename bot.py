@@ -355,40 +355,35 @@ def document_handler(message):
         return
 
     status = bot.send_message(message.chat.id, "⏳ ፋይሉ እየተፈተሸ ነው...")
+    
     try:
-        info = bot.get_file(document.file_id)
-        raw = bot.download_file(info.file_path).decode(
-            "utf-8", errors="replace"
+        response = session.get(
+            "https://crt.sh/",
+            params={"q": f"%.{domain}", "output": "json"},
+            timeout=(10, 60)
         )
-        domains = []
-        for line in raw.splitlines():
-            domain = normalize_domain(line)
-            if domain and domain not in domains:
-                domains.append(domain)
-            if len(domains) >= 100:
-                break
+        response.raise_for_status()
+        data = response.json()
+        found = set()
 
-        if not domains:
-            bot.edit_message_text(
-                "⚠️ ትክክለኛ domain አልተገኘም።",
-                message.chat.id, status.message_id
-            )
-            return
+        for item in data if isinstance(data, list) else []:
+            for name in str(item.get("name_value", "")).splitlines():
+                name = name.strip().lower().lstrip("*.")
+                if name == domain or name.endswith("." + domain):
+                    if normalize_domain(name):
+                        found.add(name)
 
-        lines = []
-        for domain in domains:
-            try:
-                ip = socket.gethostbyname(domain)
-                try:
-                    r = session.get(
-                        f"https://{domain}/", timeout=8
-                    )
-                    web = f"HTTPS {r.status_code}"
-                except requests.RequestException:
-                    web = "HTTPS unavailable"
-                lines.append(f"{domain}\t{ip}\t{web}")
-            except Exception:
-                lines.append(f"{domain}\tDNS_FAILED\t-")
+    except requests.exceptions.Timeout:
+        log.warning("crt.sh timed out for %s", domain)
+        found = set()
+
+    except requests.RequestException:
+        log.exception("crt.sh request failed")
+        found = set()
+
+    except ValueError:
+        log.exception("crt.sh returned invalid JSON")
+        found = set()
 
         output = io.BytesIO(
             ("DOMAIN\tIP\tHTTP_STATUS\n" + "\n".join(lines)).encode()
