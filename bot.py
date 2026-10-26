@@ -212,9 +212,30 @@ def subdomain_handler(message):
             params={"q": f"%.{domain}", "output": "json"},
             timeout=(5, 20)
         )
-        response.raise_for_status()
-        data = response.json()
-        found = set()
+        
+        if response.status_code != 200:
+            log.warning(
+                "crt.sh returned HTTP %s for %s",
+                response.status_code,
+                domain
+            )
+            found = set()
+        else:
+            data = response.json()
+            found = set()
+
+            for item in data if isinstance(data, list) else []:
+                for name in str(
+                    item.get("name_value", "")
+                ).splitlines():
+                    name = name.strip().lower().lstrip("*.")
+                    if (
+                        name == domain
+                        or name.endswith("." + domain)
+                    ):
+                        if normalize_domain(name):
+                            found.add(name)
+
 
         for item in data if isinstance(data, list) else []:
             for name in str(item.get("name_value", "")).splitlines():
