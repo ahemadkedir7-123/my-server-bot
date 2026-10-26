@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw
 TOKEN = "8788982436:AAHCZmgmksgz0EYg6vOqRd1Kk9Q4SOkPPnI"
 bot = telebot.TeleBot(TOKEN)
 
+
 # የፕሮሞሽን አድራሻ
 ADMIN_LINK = "https://t.me/Shemsadin_vip"
 
@@ -191,7 +192,6 @@ def handle_document(message):
                 via = r.headers.get('Via', '').lower()
                 x_cache = r.headers.get('X-Cache', '').lower()
                 
-                # ትክክለኛ የባግ ሆስት (CDN/Cloud) መኖራቸውን ማረጋገጫ
                 if 'cloudflare' in server or 'cloudfront' in server or 'akamai' in server or 'cloudfront' in via or 'cloudfront' in x_cache or 'awselb' in server or r.status_code in [200, 301, 302, 403]:
                     valid_bug_hosts.append(f"• `http://{domain}` (Server/CDN: `{r.headers.get('Server', 'Cloud/CDN')}`)")
             except:
@@ -224,7 +224,7 @@ def handle_document(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 🌐 Subdomain Finder (አንድም ሳይቀር ከሁሉም ሰርቨሮች የሚሰበስብ)
+# 9. 🌐 Subdomain Finder
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
@@ -236,7 +236,6 @@ def process_super_subdomain(message):
 def process_subdomain_direct(chat_id, query, msg_id):
     subdomains = set()
     
-    # 1. crt.sh API
     try:
         url = f"https://crt.sh/?q=%25.{query}&output=json"
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -252,7 +251,6 @@ def process_subdomain_direct(chat_id, query, msg_id):
     except:
         pass
 
-    # 2. HackerTarget API
     try:
         alt_url = f"https://api.hackertarget.com/hostsearch/?q={query}"
         res = requests.get(alt_url, timeout=15)
@@ -266,7 +264,6 @@ def process_subdomain_direct(chat_id, query, msg_id):
     except:
         pass
 
-    # 3. BufferOver.run API
     try:
         buf_url = f"https://dns.bufferover.run/dns?q=.{query}"
         res = requests.get(buf_url, timeout=15)
@@ -335,4 +332,138 @@ def process_dns_lookup(message):
         bot.delete_message(chat_id, processing_msg.message_id)
         bot.send_message(chat_id, result, parse_mode="Markdown")
     except Exception as e:
-        bot.edit_message_text(f"❌ የዲ ኤን ኤስ መረጃ ማግኘት አልተቻለም: {e}", chat_id, processing
+        bot.edit_message_text(f"❌ የዲ ኤን ኤስ መረጃ ማግኘት አልተቻለም: {e}", chat_id, processing_msg.message_id)
+
+# 11. 📡 Web Host Scanner Pro
+def process_web_scanner_pro(message):
+    chat_id = message.chat.id
+    if not message.text:
+        return
+    domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
+
+    processing_msg = bot.send_message(chat_id, f"📡 **{domain}** መረጃውን በዝርዝር እያመጣ ነው፣ እባክዎ ይጠብቁ...", parse_mode="Markdown")
+
+    try:
+        ip = socket.gethostbyname(domain)
+        
+        ports_to_check = [
+            ("HTTP:80", f"http://{domain}:80"),
+            ("HTTPS:443", f"https://{domain}:443"),
+            ("HTTP:8080", f"http://{domain}:8080"),
+            ("HTTPS:8443", f"https://{domain}:8443")
+        ]
+
+        port_results = []
+        for name, url in ports_to_check:
+            try:
+                r = requests.get(url, timeout=4, allow_redirects=True)
+                server = r.headers.get('Server', 'nginx')
+                
+                status_line = f"🔷 **{name}** ➔ ✅ **OPEN**\n   • Status: `{r.status_code}`\n   • Bug Host CDN: ✅ **Yes**\n   • Server: `{server}`"
+                port_results.append(status_line)
+            except:
+                port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
+
+        report = (
+            f"╔══════════════════════════════╗\n"
+            f"║    🛡️ **WEB HOST SCANNER**    ║\n"
+            f"╚══════════════════════════════╝\n\n"
+            f"🎯 **Domain:** `{domain}`\n"
+            f"📌 **IPs:** `{ip}`\n\n" +
+            "\n\n".join(port_results)
+        )
+
+        bot.delete_message(chat_id, processing_msg.message_id)
+        bot.send_message(chat_id, report, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.edit_message_text(f"❌ ሆስቱ አልተገኘም: {e}", chat_id, processing_msg.message_id)
+
+# 12. 🔍 Domain & IP Recon
+def process_ip_recon(message):
+    chat_id = message.chat.id
+    if not message.text:
+        return
+    target = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
+
+    try:
+        ip = socket.gethostbyname(target)
+        res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+
+        if res.get('status') == 'success':
+            text = (
+                f"🔍 **IP Recon Report:**\n\n"
+                f"📌 **Target:** `{target}`\n"
+                f"🌐 **IP:** `{ip}`\n"
+                f"🌍 **Country:** `{res.get('country')}`\n"
+                f"🏙️ **City:** `{res.get('city')}`\n"
+                f"🏢 **ISP:** `{res.get('isp')}`"
+            )
+            bot.send_message(chat_id, text, parse_mode="Markdown")
+        else:
+            bot.send_message(chat_id, f"⚠️ መረጃ ማግኘት አልተቻለም። IP: `{ip}`", parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
+
+# 13. 🖼️ Image Info & Editor
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    chat_id = message.chat.id
+
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        image = Image.open(io.BytesIO(downloaded_file))
+        width, height = image.size
+        format_type = image.format
+        file_size_kb = round(len(downloaded_file) / 1024, 2)
+
+        caption_text = message.caption
+        if caption_text:
+            draw = ImageDraw.Draw(image)
+            text_position = (20, height - 60)
+            draw.text(text_position, caption_text, fill=(255, 255, 255))
+            
+            output_io = io.BytesIO()
+            image.save(output_io, format='JPEG')
+            output_io.seek(0)
+
+            info_msg = (
+                f"🖼️ **Image Edit Success!**\n\n"
+                f"📐 **Resolution:** `{width}x{height}`\n"
+                f"📁 **Format:** `{format_type}`\n"
+                f"📦 **Size:** `{file_size_kb} KB`\n"
+                f"✍️ **Added Text:** `{caption_text}`"
+            )
+            bot.send_photo(chat_id, output_io, caption=info_msg, parse_mode="Markdown")
+        else:
+            info_msg = (
+                f"🖼️ **Image Info Analysis:**\n\n"
+                f"📐 **Resolution:** `{width}x{height}` px\n"
+                f"📁 **Format:** `{format_type}`\n"
+                f"📦 **Size:** `{file_size_kb} KB`\n\n"
+                f"💡 *ምስሉ ላይ ጽሁፍ ለመጻፍ ከፎቶው ጋር Caption/ጽሁፍ አያይዘው ይላኩ!*"
+            )
+            bot.send_message(chat_id, info_msg, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.send_message(chat_id, f"❌ የምስል ስህተት: {e}")
+
+# 14. Flask Server for Render
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "NetX Tools Pro Bot is running successfully!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+if __name__ == "__main__":
+    t = threading.Thread(target=run_flask)
+    t.start()
+    
+    print("Bot is starting polling...")
+    bot.infinity_polling()
