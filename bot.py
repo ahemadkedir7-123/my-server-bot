@@ -24,10 +24,7 @@ SECURITY_HEADERS = [
     "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"
 ]
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is missing.")
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None)
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
