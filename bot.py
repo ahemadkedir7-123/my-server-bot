@@ -1,1008 +1,430 @@
-
-import os
-import re
-import io
-import ssl
-import socket
-import time
-import logging
-import threading
+import os, re, io, ssl, time, socket, logging, threading
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-
 import requests
 import telebot
 from telebot import types
 from flask import Flask, jsonify
 
-# ==================================================
-# NETX TOOLS PRO — CONFIGURATION
-# ==================================================
-
 TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
 bot = telebot.TeleBot(TOKEN)
-
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-)
-log = logging.getLogger("NetXToolsPro")
-
-SESSION = requests.Session()
-SESSION.headers.update({
-    "User-Agent": "NetXToolsPro/2.0"
-})
-
-REQUEST_TIMEOUT = 12
-MAX_SUBDOMAINS_IN_CHAT = 50
-MAX_SUBDOMAIN_FILE_SIZE = 5 * 1024 * 1024
-
+ADMIN_CONTACT = "https://t.me/None_Breaker"
+PORT = int(os.getenv("PORT", "10000"))
+TIMEOUT = 60
+MAX_BULK_HOSTS = 10
 SECURITY_HEADERS = [
-    "Strict-Transport-Security",
-    "Content-Security-Policy",
-    "X-Content-Type-Options",
-    "Referrer-Policy",
-    "Permissions-Policy"
+    "Strict-Transport-Security", "Content-Security-Policy",
+    "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"
 ]
+if not BOT_TOKEN:
+    raise RuntimeError("BOT_TOKEN environment variable is missing.")
+
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None)
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("NetXToolsPro")
+session = requests.Session()
+session.headers.update({"User-Agent": "NetXToolsPro/3.0"})
 
 
-# ==================================================
-# DOMAIN VALIDATION
-# ==================================================
-
-def normalize_domain(value):
-    if not value:
-        return None
-
-    value = value.strip().lower()
-
+def domain_ok(value):
+    value = (value or "").strip().lower()
     if "://" in value:
-        try:
-            value = urlparse(value).hostname or ""
-        except ValueError:
-            return None
-
+        value = urlparse(value).hostname or ""
     value = value.split("/")[0].rstrip(".")
-
-    # Remove a port only when input looks like host:port.
     if value.count(":") == 1:
-        host, possible_port = value.rsplit(":", 1)
-        if possible_port.isdigit():
+        host, port = value.rsplit(":", 1)
+        if port.isdigit():
             value = host
-
-    if not value or len(value) > 253:
-        return None
-
-    pattern = (
-        r"(?=.{1,253}$)"
-        r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-        r"[a-z]{2,63}"
-    )
-
-    if not re.fullmatch(pattern, value):
-        return None
-
-    return value
+    pat = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    return value if re.fullmatch(pat, value) else None
 
 
-def valid_domain_or_reply(message):
-    domain = normalize_domain(message.text or "")
-
-    if not domain:
-        bot.reply_to(
-            message,
-            "❌ Domain ትክክል አይደለም።\n"
-            "ምሳሌ: example.com"
-        )
-        return None
-
-    return domain
+def title_block(title, target=""):
+    lines = ["╭━━━━━━━━━━━━━━━━━━╮", "      NETX TOOLS PRO",
+             f"       {title}", "╰━━━━━━━━━━━━━━━━━━╯"]
+    if target:
+        lines += ["", f"🎯 Target: {target}"]
+    lines += ["", "🕒 UTC: " + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")]
+    return lines
 
 
-def get_domain(message, callback):
-    prompt = bot.send_message(
-        message.chat.id,
-        "🌐 Domain ላክ።\n\n"
-        "ምሳሌ: example.com\n"
-        "ወይም: https://example.com"
-    )
-    bot.register_next_step_handler(prompt, callback)
-
-
-# ==================================================
-# MAIN MENU
-# ==================================================
-
-def main_keyboard():
-    keyboard = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        row_width=2
-    )
-
-    keyboard.add(
+def menu():
+    k = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    k.add(
         types.KeyboardButton("🌐 DNS Lookup"),
         types.KeyboardButton("🔎 Subdomain Finder"),
         types.KeyboardButton("🛰️ Web Recon"),
         types.KeyboardButton("🛡️ Pentest Tools"),
         types.KeyboardButton("🔍 Host Checker"),
-        types.KeyboardButton("ℹ️ Help")
+        types.KeyboardButton("📦 Bulk Host Checker"),
+        types.KeyboardButton("👨‍💻 Admin Contact"),
+        types.KeyboardButton("ℹ️ Help"),
     )
+    return k
 
-    return keyboard
+
+def ask_domain(message, callback):
+    m = bot.send_message(message.chat.id, "🌐 Domain ላክ። ምሳሌ: example.com")
+    bot.register_next_step_handler(m, callback)
+
+
+def validate(message):
+    d = domain_ok(message.text)
+    if not d:
+        bot.reply_to(message, "❌ Domain ትክክል አይደለም። ምሳሌ: example.com")
+    return d
+
+
+def send_txt(chat_id, filename, text, caption):
+    data = io.BytesIO(text.encode("utf-8"))
+    data.name = filename
+    bot.send_document(chat_id, data, caption=caption)
 
 
 @bot.message_handler(commands=["start", "menu"])
-def start_command(message):
+def start(message):
     bot.send_message(
         message.chat.id,
-        "🚀 NETX TOOLS PRO\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "የድረ-ገጽ እና የኔትወርክ መረጃ መሣሪያዎች።\n\n"
-        "🌐 DNS Lookup — IP መረጃ\n"
-        "🔎 Subdomain Finder — public subdomains\n"
-        "🛰️ Web Recon — መሠረታዊ web መረጃ\n"
-        "🛡️ Pentest Tools — መሠረታዊ security checks\n"
-        "🔍 Host Checker — ዝርዝር host report\n\n"
-        "⚠️ የራስህን ወይም ለመፈተሽ ፈቃድ "
-        "ያለህን ሲስተም ብቻ ተጠቀም።",
-        reply_markup=main_keyboard()
-    )
+        "🚀 NETX TOOLS PRO\n━━━━━━━━━━━━━━━━━━\n\n"
+        "🌐 DNS Lookup\n🔎 Subdomain Finder\n🛰️ Web Recon\n"
+        "🛡️ Pentest Tools\n🔍 Host Checker\n📦 Bulk Host Checker\n"
+        "👨‍💻 Admin Contact\n\n"
+        "ለራስህ ወይም ፈቃድ ላለህ ሲስተም ብቻ ተጠቀም።",
+        reply_markup=menu())
 
 
 @bot.message_handler(commands=["help"])
-def help_command(message):
-    send_help(message.chat.id)
+def help_cmd(message):
+    bot.send_message(message.chat.id,
+        "📘 HELP\nDNS Lookup: IP addresses\nSubdomain Finder: public passive sources\n"
+        "Web Recon: HTTP status and headers\nPentest Tools: basic TLS, headers and web ports\n"
+        "Host Checker: combined report\nBulk Host Checker: up to 10 domains\n"
+        "These are basic diagnostics, not a full security audit.")
 
 
-def send_help(chat_id):
-    bot.send_message(
-        chat_id,
-        "📘 NETX TOOLS PRO — HELP\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        "🌐 DNS Lookup\n"
-        "Domain IP addresses ለማየት።\n\n"
-        "🔎 Subdomain Finder\n"
-        "ከpublic certificate እና lookup sources "
-        "የተገኙ subdomains ለማየት።\n\n"
-        "🛰️ Web Recon\n"
-        "HTTP status, redirects እና web headers።\n\n"
-        "🛡️ Pentest Tools\n"
-        "TLS, security headers እና TCP ports 80/443።\n\n"
-        "🔍 Host Checker\n"
-        "DNS, HTTP/HTTPS, TLS, response time እና "
-        "security headers በሙሉ ሪፖርት።\n\n"
-        "ℹ️ እነዚህ መሣሪያዎች መሠረታዊ ምርመራ "
-        "ብቻ ያደርጋሉ፤ ሙሉ security audit አይደሉም።"
-    )
-
-
-# ==================================================
-# DNS LOOKUP
-# ==================================================
-
-def dns_lookup(domain):
+def dns_result(domain):
+    lines = title_block("DNS LOOKUP", domain) + ["", "━━━━━━━━ RESULTS ━━━━━━━━"]
     try:
-        results = socket.getaddrinfo(
-            domain,
-            None,
-            type=socket.SOCK_STREAM
-        )
-
-        ips = sorted({
-            item[4][0] for item in results
-        })
-
-        if not ips:
-            return f"❌ {domain}\nIP address አልተገኘም።"
-
-        return (
-            "🌐 DNS LOOKUP\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            f"Domain: {domain}\n"
-            f"IP count: {len(ips)}\n\n"
-            + "\n".join(f"• {ip}" for ip in ips)
-        )
-
-    except socket.gaierror:
-        return (
-            f"❌ DNS መረጃ አልተገኘም።\n"
-            f"Domain: {domain}"
-        )
-
-    except Exception as exc:
-        log.exception("DNS lookup failed")
-        return f"⚠️ DNS error: {type(exc).__name__}"
+        ips = sorted({x[4][0] for x in socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)})
+        lines += [f"🟢 {len(ips)} IP address(es) found"] + [f"• {ip}" for ip in ips[:25]]
+    except Exception as e:
+        lines.append(f"🔴 DNS failed: {type(e).__name__}")
+    return "\n".join(lines)
 
 
 def dns_handler(message):
-    domain = valid_domain_or_reply(message)
-    if not domain:
-        return
+    d = validate(message)
+    if d:
+        bot.send_message(message.chat.id, dns_result(d)[:4000])
 
-    bot.send_message(
-        message.chat.id,
-        "⏳ DNS lookup በመስራት ላይ..."
-    )
-    bot.send_message(
-        message.chat.id,
-        dns_lookup(domain)
-    )
-
-
-# ==================================================
-# SUBDOMAIN FINDER
-# Uses public passive sources; no brute-force.
-# ==================================================
 
 def find_subdomains(domain):
-    found = set()
-    errors = []
-
-    # Certificate Transparency
+    found, notes = set(), []
     try:
-        response = SESSION.get(
-            "https://crt.sh/",
-            params={
-                "q": f"%.{domain}",
-                "output": "json"
-            },
-            timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-
-        try:
-            records = response.json()
-        except ValueError:
-            records = []
-
-        for record in records:
-            names = record.get("name_value", "")
-
-            for raw_name in names.splitlines():
-                name = raw_name.strip().lower().rstrip(".")
-
+        r = session.get("https://crt.sh/", params={"q": f"%.{domain}", "output": "json"}, timeout=60)
+        r.raise_for_status()
+        for rec in r.json():
+            for raw in rec.get("name_value", "").splitlines():
+                name = raw.strip().lower().rstrip(".")
                 if name.startswith("*."):
                     name = name[2:]
-
-                if (
-                    name == domain
-                    or name.endswith("." + domain)
-                ):
-                    if normalize_domain(name):
-                        found.add(name)
-
-    except Exception as exc:
-        log.warning("crt.sh failed: %s", type(exc).__name__)
-        errors.append("Certificate Transparency source unavailable")
-
-    # HackerTarget public host search
-    try:
-        response = SESSION.get(
-            "https://api.hackertarget.com/hostsearch/",
-            params={"q": domain},
-            timeout=REQUEST_TIMEOUT
-        )
-        response.raise_for_status()
-
-        result_text = response.text.strip()
-
-        if result_text and "error" not in result_text.lower():
-            for line in result_text.splitlines():
-                parts = line.split(",")
-
-                if not parts:
-                    continue
-
-                name = parts[0].strip().lower().rstrip(".")
-
-                if (
-                    normalize_domain(name)
-                    and (
-                        name == domain
-                        or name.endswith("." + domain)
-                    )
-                ):
+                if domain_ok(name) and (name == domain or name.endswith("." + domain)):
                     found.add(name)
-
-    except Exception as exc:
-        log.warning(
-            "HackerTarget failed: %s",
-            type(exc).__name__
-        )
-        errors.append("Secondary public lookup unavailable")
-
-    return sorted(found), errors
+        notes.append("crt.sh: responded")
+    except Exception as e:
+        notes.append(f"crt.sh unavailable ({type(e).__name__})")
+        log.warning("crt.sh failed: %s", type(e).__name__)
+    try:
+        r = session.get("https://api.hackertarget.com/hostsearch/",
+                        params={"q": domain}, timeout=30)
+        r.raise_for_status()
+        body = r.text.strip()
+        if body.lower().startswith(("error", "api count", "no records")):
+            notes.append("HackerTarget: " + body[:120])
+        else:
+            for line in body.splitlines():
+                name = line.split(",")[0].strip().lower().rstrip(".")
+                if domain_ok(name) and (name == domain or name.endswith("." + domain)):
+                    found.add(name)
+            notes.append("HackerTarget: responded")
+    except Exception as e:
+        notes.append(f"HackerTarget unavailable ({type(e).__name__})")
+    return sorted(found), notes
 
 
 def subdomain_handler(message):
-    domain = valid_domain_or_reply(message)
-    if not domain:
-        return
-
-    status = bot.send_message(
-        message.chat.id,
-        "🔎 SUBDOMAIN FINDER\n\n"
-        "⏳ Public sources በመፈተሽ ላይ..."
-    )
-
-    found, errors = find_subdomains(domain)
-
-    report_lines = [
-        "NETX TOOLS PRO — SUBDOMAIN REPORT",
-        f"Domain: {domain}",
-        f"UTC: {datetime.now(timezone.utc).isoformat()}",
-        f"Total unique names found: {len(found)}",
-        "",
-        *found
-    ]
-
-    if errors:
-        report_lines.extend([
-            "",
-            "Source notes:",
-            *[f"- {item}" for item in errors]
-        ])
-
-    report = "\n".join(report_lines)
-
-    summary = (
-        "🔎 SUBDOMAIN FINDER\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 Domain: {domain}\n"
-        f"📊 Unique names found: {len(found)}\n"
-    )
-
-    if found:
-        summary += (
-            "\n"
-            + "\n".join(
-                f"• {name}"
-                for name in found[:MAX_SUBDOMAINS_IN_CHAT]
-            )
-        )
-
-        if len(found) > MAX_SUBDOMAINS_IN_CHAT:
-            summary += (
-                f"\n\n📄 ሙሉ ውጤት: {len(found)} names "
-                "በTXT ፋይል ውስጥ አሉ።"
-            )
-    else:
-        summary += (
-            "\nምንም ውጤት አልተገኘም። "
-            "ይህ domain subdomains የሉትም ማለት አይደለም።"
-        )
-
-    if errors:
-        summary += "\n\n⚠️ አንዳንድ public sources አልተገናኙም።"
-
+    d = validate(message)
+    if not d: return
+    m = bot.send_message(message.chat.id, "🔎 Subdomain Finder: public sources እየተፈተሹ ነው...")
+    found, notes = find_subdomains(d)
+    lines = title_block("SUBDOMAIN REPORT", d) + ["", f"📊 Names found: {len(found)}", ""]
+    lines += [f"• {x}" for x in found[:40]] if found else ["No names returned by queried sources."]
+    lines += ["", "SOURCE STATUS:"] + notes + ["", "Zero results do not prove no subdomains exist."]
     try:
-        bot.edit_message_text(
-            summary[:4000],
-            message.chat.id,
-            status.message_id
-        )
+        bot.edit_message_text("\n".join(lines)[:4000], message.chat.id, m.message_id)
     except Exception:
-        bot.send_message(message.chat.id, summary[:4000])
-
-    file_data = io.BytesIO(report.encode("utf-8"))
-    file_data.name = f"subdomains_{domain}.txt"
-
-    bot.send_document(
-        message.chat.id,
-        file_data,
-        caption=(
-            f"📄 Subdomain report — {domain}\n"
-            f"Names found: {len(found)}"
-        )
-    )
+        bot.send_message(message.chat.id, "\n".join(lines)[:4000])
+    send_txt(message.chat.id, f"subdomains_{d}.txt",
+             "\n".join(lines + [""] + found), f"📄 Subdomain report — {d}")
 
 
-# ==================================================
-# BASIC WEB RECON
-# ==================================================
+def web_get(domain, scheme):
+    return session.get(f"{scheme}://{domain}/", timeout=TIMEOUT,
+                       allow_redirects=True, stream=True)
 
-def web_recon(domain):
-    lines = [
-        "🛰️ BASIC WEB RECON",
-        "━━━━━━━━━━━━━━━━━━",
-        f"Domain: {domain}",
-        ""
-    ]
 
+def web_recon_result(domain):
+    lines = title_block("WEB RECON", domain) + ["", "━━━━━━━━ HTTP / HTTPS ━━━━━━━━"]
     for scheme in ("https", "http"):
-        response = None
-
+        r = None
         try:
-            response = SESSION.get(
-                f"{scheme}://{domain}/",
-                timeout=REQUEST_TIMEOUT,
-                allow_redirects=True,
-                stream=True
-            )
-
-            lines.extend([
-                f"Scheme: {scheme.upper()}",
-                f"HTTP status: {response.status_code}",
-                f"Final URL: {response.url}",
-                f"Redirects: {len(response.history)}"
-            ])
-
-            server = response.headers.get("Server")
-            content_type = response.headers.get("Content-Type")
-
-            if server:
-                lines.append(f"Server header: {server[:200]}")
-
-            if content_type:
-                lines.append(f"Content-Type: {content_type[:200]}")
-
+            t = time.perf_counter()
+            r = web_get(domain, scheme)
+            ms = round((time.perf_counter() - t) * 1000)
+            lines += [f"🟢 {scheme.upper()} — HTTP {r.status_code}",
+                      f"⏱️ {ms} ms", f"🔁 Redirects: {len(r.history)}",
+                      f"🔗 Final URL: {r.url[:220]}"]
+            for h in ("Server", "Content-Type"):
+                if r.headers.get(h): lines.append(f"{h}: {r.headers[h][:160]}")
             return "\n".join(lines)
-
-        except requests.RequestException as exc:
-            lines.append(
-                f"{scheme.upper()} request failed: {type(exc).__name__}"
-            )
-
+        except requests.RequestException as e:
+            lines.append(f"🔴 {scheme.upper()}: {type(e).__name__}")
         finally:
-            if response is not None:
-                response.close()
-
-    lines.append("")
-    lines.append("Neither HTTP nor HTTPS returned a response.")
-    return "\n".join(lines)
+            if r is not None: r.close()
+    return "\n".join(lines + ["No HTTP response received."])
 
 
 def recon_handler(message):
-    domain = valid_domain_or_reply(message)
-    if not domain:
-        return
-
-    bot.send_message(
-        message.chat.id,
-        "⏳ Web recon በመስራት ላይ..."
-    )
-    bot.send_message(
-        message.chat.id,
-        web_recon(domain)[:4000]
-    )
+    d = validate(message)
+    if d: bot.send_message(message.chat.id, web_recon_result(d)[:4000])
 
 
-# ==================================================
-# HOST CHECKER — DETAILED REPORT
-# ==================================================
-
-def host_checker_report(domain):
-    started = time.perf_counter()
-
-    lines = [
-        "╔══════════════════════════╗",
-        "       NETX TOOLS PRO",
-        "         HOST CHECKER",
-        "╚══════════════════════════╝",
-        "",
-        f"TARGET: {domain}",
-        f"UTC: {datetime.now(timezone.utc).isoformat()}",
-        "",
-        "━━━━━━━━ DNS / IP ━━━━━━━━"
-    ]
-
-    # DNS
+def host_report(domain):
+    lines = title_block("HOST CHECKER", domain) + ["", "━━━━━━━━ DNS / IP ━━━━━━━━"]
+    ips = []
     try:
-        info = socket.getaddrinfo(
-            domain,
-            None,
-            type=socket.SOCK_STREAM
-        )
-        ips = sorted({item[4][0] for item in info})
-
-        if ips:
-            lines.append("🟢 DNS: RESOLVED")
-            for ip in ips[:15]:
-                lines.append(f"  • {ip}")
-            if len(ips) > 15:
-                lines.append(f"  • +{len(ips) - 15} more")
-        else:
-            ips = []
-            lines.append("🔴 DNS: NO IP FOUND")
-
-    except Exception as exc:
-        ips = []
-        lines.append(f"🔴 DNS failed: {type(exc).__name__}")
-
-    # HTTP / HTTPS
-    lines.extend(["", "━━━━━━━━ WEB STATUS ━━━━━━━━"])
-    web_result = None
-
+        ips = sorted({x[4][0] for x in socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)})
+        lines.append("🟢 DNS resolved" if ips else "🔴 No IP addresses")
+        lines += [f"• {ip}" for ip in ips[:15]]
+    except Exception as e:
+        lines.append(f"🔴 DNS: {type(e).__name__}")
+    lines += ["", "━━━━━━━━ HTTP / HTTPS ━━━━━━━━"]
+    headers, responded = {}, False
     for scheme in ("https", "http"):
-        response = None
-
+        r = None
         try:
-            request_started = time.perf_counter()
-            response = SESSION.get(
-                f"{scheme}://{domain}/",
-                timeout=REQUEST_TIMEOUT,
-                allow_redirects=True,
-                stream=True
-            )
-            response_time = round(
-                (time.perf_counter() - request_started) * 1000
-            )
-
-            web_result = {
-                "scheme": scheme,
-                "status": response.status_code,
-                "url": response.url,
-                "redirects": len(response.history),
-                "elapsed_ms": response_time,
-                "headers": dict(response.headers)
-            }
-
-            lines.extend([
-                f"🟢 {scheme.upper()}: RESPONSE RECEIVED",
-                f"HTTP status: {response.status_code}",
-                f"Response time: {response_time} ms",
-                f"Redirects: {len(response.history)}",
-                f"Final URL: {response.url[:300]}"
-            ])
+            t = time.perf_counter()
+            r = web_get(domain, scheme)
+            ms = round((time.perf_counter() - t) * 1000)
+            headers, responded = dict(r.headers), True
+            lines += [f"🟢 {scheme.upper()} — HTTP {r.status_code}",
+                      f"⏱️ {ms} ms", f"🔁 Redirects: {len(r.history)}",
+                      f"🔗 {r.url[:200]}"]
             break
-
-        except requests.RequestException as exc:
-            lines.append(
-                f"🔴 {scheme.upper()} failed: {type(exc).__name__}"
-            )
-
+        except requests.RequestException as e:
+            lines.append(f"🔴 {scheme.upper()}: {type(e).__name__}")
         finally:
-            if response is not None:
-                response.close()
-
-    # TLS certificate
-    lines.extend(["", "━━━━━━━━ SSL / TLS ━━━━━━━━"])
-
+            if r is not None: r.close()
+    lines += ["", "━━━━━━━━ SSL / TLS ━━━━━━━━"]
     try:
-        context = ssl.create_default_context()
-
-        with socket.create_connection(
-            (domain, 443),
-            timeout=5
-        ) as raw_socket:
-            with context.wrap_socket(
-                raw_socket,
-                server_hostname=domain
-            ) as tls_socket:
-                certificate = tls_socket.getpeercert()
-
-                lines.append("🟢 TLS certificate: VERIFIED")
-                lines.append(
-                    f"TLS version: {tls_socket.version()}"
-                )
-
-                expiry = certificate.get("notAfter")
-
+        ctx = ssl.create_default_context()
+        with socket.create_connection((domain, 443), timeout=15) as raw:
+            with ctx.wrap_socket(raw, server_hostname=domain) as tls:
+                lines.append(f"🟢 TLS: {tls.version()}")
+                expiry = tls.getpeercert().get("notAfter")
                 if expiry:
-                    expiry_ts = ssl.cert_time_to_seconds(expiry)
-                    expiry_dt = datetime.fromtimestamp(
-                        expiry_ts,
-                        timezone.utc
-                    )
-                    days_remaining = (
-                        expiry_dt - datetime.now(timezone.utc)
-                    ).days
-
-                    lines.append(
-                        "Certificate expires: "
-                        + expiry_dt.strftime("%Y-%m-%d %H:%M UTC")
-                    )
-                    lines.append(
-                        f"Days remaining: {days_remaining}"
-                    )
-
-    except Exception as exc:
-        lines.append(
-            f"🔴 TLS verification failed: {type(exc).__name__}"
-        )
-
-    # Security headers
-    lines.extend(["", "━━━━━━━━ SECURITY HEADERS ━━━━━━━━"])
-
-    if web_result:
-        response_headers = {
-            key.lower(): value
-            for key, value in web_result["headers"].items()
-        }
-        present = 0
-
-        for header in SECURITY_HEADERS:
-            value = response_headers.get(header.lower())
-
-            if value:
-                present += 1
-                lines.append(f"🟢 {header}: PRESENT")
-                lines.append(f"   Value: {value[:200]}")
-            else:
-                lines.append(f"🟡 {header}: MISSING")
-
-        lines.append(
-            f"Summary: {present}/{len(SECURITY_HEADERS)} headers present"
-        )
+                    dt = datetime.fromtimestamp(ssl.cert_time_to_seconds(expiry), timezone.utc)
+                    lines += [f"Certificate expires: {dt:%Y-%m-%d %H:%M UTC}",
+                              f"Days remaining: {(dt - datetime.now(timezone.utc)).days}"]
+    except Exception as e:
+        lines.append(f"⚠️ TLS: {type(e).__name__}")
+    lines += ["", "━━━━━━━━ SECURITY HEADERS ━━━━━━━━"]
+    if responded:
+        lower = {k.lower(): v for k, v in headers.items()}
+        count = 0
+        for h in SECURITY_HEADERS:
+            exists = bool(lower.get(h.lower()))
+            count += int(exists)
+            lines.append(f"{'🟢 PRESENT' if exists else '🟡 MISSING'}: {h}")
+        lines.append(f"Summary: {count}/{len(SECURITY_HEADERS)} present")
     else:
-        lines.append("⚠️ HTTP headers unavailable.")
-
-    # Standard web ports only
-    lines.extend(["", "━━━━━━━━ WEB PORTS ━━━━━━━━"])
-
+        lines.append("Headers unavailable")
+    lines += ["", "━━━━━━━━ WEB PORTS ━━━━━━━━"]
     for port in (80, 443):
         try:
-            with socket.create_connection(
-                (domain, port),
-                timeout=3
-            ):
-                lines.append(f"🟢 TCP {port}: REACHABLE")
+            with socket.create_connection((domain, port), timeout=10):
+                lines.append(f"🟢 TCP {port}: reachable")
         except OSError:
-            lines.append(f"🔴 TCP {port}: NOT REACHABLE")
-
-    total_time = round(
-        (time.perf_counter() - started) * 1000
-    )
-
-    lines.extend([
-        "",
-        "━━━━━━━━ FINAL SUMMARY ━━━━━━━━",
-        f"DNS: {'OK' if ips else 'FAILED'}",
-        f"Website: {'RESPONDED' if web_result else 'NO RESPONSE'}",
-        f"Total check time: {total_time} ms",
-        "",
-        "NOTES:",
-        "- This is a basic diagnostic report.",
-        "- Missing headers alone do not prove a vulnerability.",
-        "- A failed TLS check may mean TLS is unavailable or invalid.",
-        "- This is not a complete penetration test."
-    ])
-
+            lines.append(f"🔴 TCP {port}: not reachable")
+    lines += ["", "Basic diagnostics only; missing headers do not alone prove a vulnerability."]
     return "\n".join(lines)
 
 
-def send_host_report(chat_id, domain, edit_message=None):
+def host_handler(message):
+    d = validate(message)
+    if not d: return
+    m = bot.send_message(message.chat.id, f"🔍 Checking {d}...")
     try:
-        report = host_checker_report(domain)
-
-        summary = (
-            "🔍 NETX TOOLS PRO\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            f"🎯 Host: {domain}\n"
-            "📋 Host check completed\n\n"
-            "📄 ሙሉ የDNS, Web, TLS እና security "
-            "headers ሪፖርት በTXT ፋይል ተያይዟል።"
-        )
-
-        keyboard = types.InlineKeyboardMarkup(row_width=2)
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "🔄 Check Again",
-                callback_data=f"host_again:{domain}"
-            ),
-            types.InlineKeyboardButton(
-                "🏠 Main Menu",
-                callback_data="host_menu"
-            )
-        )
-
-        if edit_message:
-            try:
-                bot.edit_message_text(
-                    summary,
-                    chat_id,
-                    edit_message,
-                    reply_markup=keyboard
-                )
-            except Exception:
-                bot.send_message(
-                    chat_id,
-                    summary,
-                    reply_markup=keyboard
-                )
-        else:
-            bot.send_message(
-                chat_id,
-                summary,
-                reply_markup=keyboard
-            )
-
-        file_data = io.BytesIO(report.encode("utf-8"))
-        file_data.name = f"host_report_{domain}.txt"
-
-        bot.send_document(
-            chat_id,
-            file_data,
-            caption=f"📋 HOST CHECKER REPORT — {domain}"
-        )
-
-    except Exception:
-        log.exception("Host checker report failed")
-        bot.send_message(
-            chat_id,
-            "⚠️ Host Checker ስህተት አጋጥሞታል። "
-            "እባክህ በኋላ እንደገና ሞክር።"
-        )
-
-
-def host_checker_handler(message):
-    domain = valid_domain_or_reply(message)
-    if not domain:
-        return
-
-    status = bot.send_message(
-        message.chat.id,
-        "🔍 NETX HOST CHECKER\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 Host: {domain}\n\n"
-        "⏳ DNS, HTTP/HTTPS, SSL/TLS እና "
-        "security headers በመፈተሽ ላይ..."
-    )
-
-    send_host_report(
-        message.chat.id,
-        domain,
-        edit_message=status.message_id
-    )
-
-
-@bot.callback_query_handler(
-    func=lambda call: (
-        call.data == "host_menu"
-        or call.data.startswith("host_again:")
-    )
-)
-def host_checker_callback(call):
-    bot.answer_callback_query(call.id)
-
-    if call.data == "host_menu":
-        bot.send_message(
-            call.message.chat.id,
-            "🏠 Main Menu — መሣሪያ ምረጥ።",
-            reply_markup=main_keyboard()
-        )
-        return
-
-    domain = normalize_domain(
-        call.data.split(":", 1)[1]
-    )
-
-    if not domain:
-        bot.send_message(
-            call.message.chat.id,
-            "❌ Domain ትክክል አይደለም።"
-        )
-        return
-
-    status = bot.send_message(
-        call.message.chat.id,
-        "🔄 Host check እንደገና በመስራት ላይ...\n"
-        f"🎯 {domain}"
-    )
-
-    send_host_report(
-        call.message.chat.id,
-        domain,
-        edit_message=status.message_id
-    )
-
-
-# ==================================================
-# BASIC AUTHORIZED PENTEST TOOLS
-# ==================================================
-
-def check_https_tls(domain):
-    lines = ["[HTTPS / TLS]"]
-
-    try:
-        context = ssl.create_default_context()
-
-        with socket.create_connection(
-            (domain, 443),
-            timeout=REQUEST_TIMEOUT
-        ) as raw:
-            with context.wrap_socket(
-                raw,
-                server_hostname=domain
-            ) as tls:
-                lines.append("HTTPS connection: Successful")
-                lines.append(f"TLS version: {tls.version()}")
-
-                cert = tls.getpeercert()
-                expiry = cert.get("notAfter")
-
-                if expiry:
-                    lines.append(
-                        f"Certificate expires: {expiry}"
-                    )
-
-    except Exception as exc:
-        lines.append(
-            f"HTTPS/TLS check failed: {type(exc).__name__}"
-        )
-
-    return lines
-
-
-def check_security_headers(domain):
-    lines = ["[Security Headers]"]
-    response = None
-
-    try:
-        response = SESSION.get(
-            f"https://{domain}/",
-            timeout=REQUEST_TIMEOUT,
-            allow_redirects=True,
-            stream=True
-        )
-
-        lines.append(f"HTTP status: {response.status_code}")
-
-        for header in SECURITY_HEADERS:
-            value = response.headers.get(header)
-
-            if value:
-                lines.append(
-                    f"[PRESENT] {header}: {value[:250]}"
-                )
-            else:
-                lines.append(f"[MISSING] {header}")
-
-    except requests.RequestException as exc:
-        lines.append(
-            f"Header check failed: {type(exc).__name__}"
-        )
-
-    finally:
-        if response is not None:
-            response.close()
-
-    return lines
-
-
-def check_common_web_ports(domain):
-    lines = ["[Common Web Ports]"]
-
-    for port in (80, 443):
+        report = host_report(d)
         try:
-            with socket.create_connection(
-                (domain, port),
-                timeout=3
-            ):
-                lines.append(f"TCP port {port}: reachable")
-        except OSError:
-            lines.append(f"TCP port {port}: not reachable")
+            bot.edit_message_text(
+                f"╭━━━━━━━━━━━━━━━━━━╮\n      NETX TOOLS PRO\n       HOST REPORT\n╰━━━━━━━━━━━━━━━━━━╯\n\n"
+                f"🎯 Host: {d}\n✅ Check completed\n📄 Full report attached.",
+                message.chat.id, m.message_id, reply_markup=report_keyboard(d))
+        except Exception:
+            bot.send_message(message.chat.id, f"🔍 Host report ready: {d}", reply_markup=report_keyboard(d))
+        send_txt(message.chat.id, f"host_report_{d}.txt", report, f"📋 Host report — {d}")
+    except Exception:
+        log.exception("Host report failed")
+        bot.send_message(message.chat.id, "❌ Report ማዘጋጀት አልተሳካም።")
 
+
+def report_keyboard(domain):
+    k = types.InlineKeyboardMarkup(row_width=2)
+    k.add(types.InlineKeyboardButton("🔄 Check Again", callback_data=f"again:{domain}"),
+          types.InlineKeyboardButton("🏠 Main Menu", callback_data="menu"))
+    return k
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "menu" or c.data.startswith("again:"))
+def callbacks(call):
+    bot.answer_callback_query(call.id)
+    if call.data == "menu":
+        bot.send_message(call.message.chat.id, "🏠 Main Menu", reply_markup=menu())
+    else:
+        d = domain_ok(call.data.split(":", 1)[1])
+        if d:
+            # Reuse the normal report path without needing a fake Message.
+            try:
+                report = host_report(d)
+                send_txt(call.message.chat.id, f"host_report_{d}.txt", report, f"📋 Host report — {d}")
+            except Exception:
+                bot.send_message(call.message.chat.id, "❌ Host check failed.")
+
+
+def check_bulk_host(domain):
+    lines = [f"🎯 {domain}"]
+    try:
+        ips = sorted({x[4][0] for x in socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)})
+        lines.append("DNS: OK — " + ", ".join(ips[:3]) if ips else "DNS: no IP")
+    except Exception as e:
+        lines.append(f"DNS: FAILED ({type(e).__name__})")
+    responded = False
+    last_error = "unknown"
+    for scheme in ("https", "http"):
+        r = None
+        try:
+            t = time.perf_counter()
+            r = web_get(domain, scheme)
+            ms = round((time.perf_counter() - t) * 1000)
+            lines.append(f"{scheme.upper()}: HTTP {r.status_code} • {ms} ms")
+            responded = True
+            break
+        except requests.RequestException as e:
+            last_error = type(e).__name__
+        finally:
+            if r is not None: r.close()
+    if not responded: lines.append(f"Web: no response ({last_error})")
     return lines
 
 
-def run_basic_pentest(domain):
-    report = [
-        "NETX TOOLS PRO — BASIC SECURITY CHECK",
-        f"Target: {domain}",
-        f"UTC time: {datetime.now(timezone.utc).isoformat()}",
-        "",
-        "Scope: basic checks only; no exploitation performed.",
-        ""
-    ]
+def bulk_handler(message):
+    domains, invalid = [], []
+    for item in (message.text or "").splitlines():
+        if not item.strip(): continue
+        d = domain_ok(item)
+        if d:
+            if d not in domains: domains.append(d)
+        else: invalid.append(item.strip()[:80])
+    if not domains:
+        bot.reply_to(message, "❌ Domain አልተገኘም። እያንዳንዱን domain በአዲስ መስመር ላክ።")
+        return
+    if len(domains) > MAX_BULK_HOSTS:
+        bot.reply_to(message, f"⚠️ ቢበዛ {MAX_BULK_HOSTS} hosts ብቻ ላክ።")
+        return
+    m = bot.send_message(message.chat.id, f"📦 Bulk Host Checker: {len(domains)} hosts እየተፈተሹ ነው...")
+    lines = title_block("BULK HOST REPORT") + [f"Hosts: {len(domains)}", ""]
+    for d in domains:
+        lines += check_bulk_host(d) + [""]
+    if invalid: lines += ["Invalid entries skipped:"] + invalid
+    report = "\n".join(lines)
+    try: bot.edit_message_text(f"📦 BULK HOST CHECKER\n━━━━━━━━━━━━━━━━━━\n✅ Checked: {len(domains)}\n📄 Full results attached as TXT.", message.chat.id, m.message_id)
+    except Exception: pass
+    send_txt(message.chat.id, "netx_bulk_host_report.txt", report, "📦 Bulk Host Report")
 
+
+def pentest_report(domain):
+    lines = title_block("BASIC SECURITY CHECK", domain)
+    lines += ["", "Scope: basic TLS, security headers and common web ports. No exploitation."]
+    lines += ["", "━━━━━━━━ TLS ━━━━━━━━"]
     try:
-        ips = sorted({
-            item[4][0]
-            for item in socket.getaddrinfo(
-                domain,
-                None,
-                type=socket.SOCK_STREAM
-            )
-        })
-        report.append("[DNS]")
-        report.extend(ips or ["No IP addresses found"])
-    except Exception as exc:
-        report.extend([
-            "[DNS]",
-            f"DNS check failed: {type(exc).__name__}"
-        ])
-
-    report.append("")
-    report.extend(check_https_tls(domain))
-    report.append("")
-    report.extend(check_security_headers(domain))
-    report.append("")
-    report.extend(check_common_web_ports(domain))
-    report.extend([
-        "",
-        "IMPORTANT:",
-        "- Missing headers alone do not prove a vulnerability.",
-        "- Port reachability does not prove a security weakness.",
-        "- This is not a full penetration test."
-    ])
-
-    return "\n".join(report)
+        ctx = ssl.create_default_context()
+        with socket.create_connection((domain, 443), timeout=15) as raw:
+            with ctx.wrap_socket(raw, server_hostname=domain) as tls:
+                lines.append(f"🟢 TLS: {tls.version()}")
+                exp = tls.getpeercert().get("notAfter")
+                if exp: lines.append(f"Certificate expiry: {exp}")
+    except Exception as e:
+        lines.append(f"⚠️ TLS: {type(e).__name__}")
+    lines += ["", "━━━━━━━━ SECURITY HEADERS ━━━━━━━━"]
+    r = None
+    try:
+        r = session.get(f"https://{domain}/", timeout=TIMEOUT, allow_redirects=True, stream=True)
+        lines.append(f"HTTP status: {r.status_code}")
+        for h in SECURITY_HEADERS:
+            lines.append(f"{'🟢 PRESENT' if r.headers.get(h) else '🟡 MISSING'}: {h}")
+    except requests.RequestException as e:
+        lines.append(f"⚠️ Headers: {type(e).__name__}")
+    finally:
+        if r is not None: r.close()
+    lines += ["", "━━━━━━━━ WEB PORTS ━━━━━━━━"]
+    for p in (80, 443):
+        try:
+            with socket.create_connection((domain, p), timeout=10): lines.append(f"🟢 TCP {p}: reachable")
+        except OSError: lines.append(f"🔴 TCP {p}: not reachable")
+    lines += ["", "Basic diagnostics only; these checks do not prove a vulnerability."]
+    return "\n".join(lines)
 
 
 def pentest_handler(message):
-    domain = valid_domain_or_reply(message)
-    if not domain:
-        return
-
-    status = bot.send_message(
-        message.chat.id,
-        "🛡️ BASIC SECURITY CHECK\n\n"
-        "⏳ መሠረታዊ security checks በመስራት ላይ..."
-    )
-
-    report = run_basic_pentest(domain)
-
-    try:
-        bot.delete_message(
-            message.chat.id,
-            status.message_id
-        )
-    except Exception:
-        pass
-
-    file_data = io.BytesIO(report.encode("utf-8"))
-    file_data.name = f"security_report_{domain}.txt"
-
-    bot.send_document(
-        message.chat.id,
-        file_data,
-        caption=f"🛡️ Security Check Report — {domain}"
-    )
+    d = validate(message)
+    if not d: return
+    m = bot.send_message(message.chat.id, f"🛡️ Basic security checks: {d}...")
+    report = pentest_report(d)
+    try: bot.delete_message(message.chat.id, m.message_id)
+    except Exception: pass
+    send_txt(message.chat.id, f"security_report_{d}.txt", report, f"🛡️ Security Report — {d}")
 
 
-# ==================================================
-# MENU ROUTER
-# ==================================================
-
-@bot.message_handler(
-    content_types=["text"],
-    func=lambda message: True
-)
-def handle_menu_text(message):
+@bot.message_handler(content_types=["text"], func=lambda m: True)
+def route(message):
     text = (message.text or "").strip()
-
-    if text == "🌐 DNS Lookup":
-        get_domain(message, dns_handler)
-
-    elif text == "🔎 Subdomain Finder":
-        get_domain(message, subdomain_handler)
-
-    elif text == "🛰️ Web Recon":
-        get_domain(message, recon_handler)
-
-    elif text == "🛡️ Pentest Tools":
-        get_domain(message, pentest_handler)
-
-    elif text == "🔍 Host Checker":
-        get_domain(message, host_checker_handler)
-
+    if text == "🌐 DNS Lookup": ask_domain(message, dns_handler)
+    elif text == "🔎 Subdomain Finder": ask_domain(message, subdomain_handler)
+    elif text == "🛰️ Web Recon": ask_domain(message, recon_handler)
+    elif text == "🛡️ Pentest Tools": ask_domain(message, pentest_handler)
+    elif text == "🔍 Host Checker": ask_domain(message, host_handler)
+    elif text == "📦 Bulk Host Checker":
+        p = bot.send_message(message.chat.id, "እስከ 10 domains ድረስ ላክ። እያንዳንዱን በአዲስ መስመር አስገባ።")
+        bot.register_next_step_handler(p, bulk_handler)
+    elif text == "👨‍💻 Admin Contact":
+        k = types.InlineKeyboardMarkup()
+        k.add(types.InlineKeyboardButton("👨‍💻 Contact Admin", url=ADMIN_CONTACT))
+        bot.send_message(message.chat.id, "NETX TOOLS PRO — ADMIN CONTACT", reply_markup=k)
     elif text == "ℹ️ Help":
-        send_help(message.chat.id)
-
+        bot.send_message(message.chat.id,
+            "📘 HELP\nDNS Lookup: IP addresses\nSubdomain Finder: passive public sources\n"
+            "Web Recon: HTTP status/headers\nPentest Tools: basic authorized checks\n"
+            "Host Checker: full diagnostic report\nBulk Host Checker: up to 10 hosts\n"
+            "These tools are basic diagnostics, not a full security audit.")
     else:
-        bot.send_message(
-            message.chat.id,
-            "ከምናሌው አንዱን ምረጥ።",
-            reply_markup=main_keyboard()
-        )
+        bot.send_message(message.chat.id, "ከምናሌው አንዱን ምረጥ።", reply_markup=menu())
 
-
-# ==================================================
-# RENDER HEALTH ENDPOINT
-# ==================================================
 
 @app.route("/")
 def home():
-    return jsonify({
-        "service": "NetX Tools Pro",
-        "status": "running"
-    })
+    return jsonify({"service": "NetX Tools Pro", "status": "running"})
 
 
 @app.route("/health")
@@ -1011,29 +433,11 @@ def health():
 
 
 def run_flask():
-    port = int(os.getenv("PORT", "10000"))
+    app.run(host="0.0.0.0", port=PORT, use_reloader=False)
 
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        use_reloader=False
-    )
-
-
-# ==================================================
-# START BOT
-# ==================================================
 
 if __name__ == "__main__":
-    threading.Thread(
-        target=run_flask,
-        daemon=True
-    ).start()
-
-    log.info("NetX Tools Pro starting...")
-
-    bot.infinity_polling(
-        skip_pending=True,
-        timeout=30,
-        long_polling_timeout=30
-    )
+    threading.Thread(target=run_flask, daemon=True).start()
+    log.info("NetX Tools Pro starting")
+    # Run only one live instance using this bot token to avoid getUpdates conflicts.
+    bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
