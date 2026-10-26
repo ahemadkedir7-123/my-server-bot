@@ -243,4 +243,4 @@ def recon_handler(message):
 def host_report(domain):
     lines = title_block("HOST CHECKER", domain) + ["━━━━━━━━━━━━━━━━━━━━━━━━━━", "📌 **1. DNS / IP RESOLUTION:**"]
     try:
-        ips = sorted({x[4][0] for x
+        ips = sorted({x[4][0] for x})
