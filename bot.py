@@ -15,8 +15,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
 bot = telebot.TeleBot(TOKEN)
-    raise RuntimeError("Missing BOT_TOKEN environment variable.")
-
+    
 ADMIN_LINK = os.getenv("ADMIN_LINK", "https://t.me/Shemsadin_vip")
 REQUIRED_CHANNELS = [
     "@Nur_Tunnel_free_ethiopian",
