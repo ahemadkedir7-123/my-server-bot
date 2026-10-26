@@ -1,419 +1,491 @@
-import os
+
 import io
-import threading
-import requests
+import os
+import re
 import socket
-import ssl
-from flask import Flask
+import logging
+import threading
+from urllib.parse import quote
+
+import requests
 import telebot
 from telebot import types
-from PIL import Image, ImageDraw
+from flask import Flask
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-# 1. የቦት ቶከን
-TOKEN = "8788982436:AAHCZmgmksgz0EYg6vOqRd1Kk9Q4SOkPPnI"
+TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
 bot = telebot.TeleBot(TOKEN)
+    raise RuntimeError("Missing BOT_TOKEN environment variable.")
 
-# የፕሮሞሽን አድራሻ
-ADMIN_LINK = "https://t.me/Shemsadin_vip"
+ADMIN_LINK = os.getenv("ADMIN_LINK", "https://t.me/Shemsadin_vip")
+REQUIRED_CHANNELS = [
+    "@Nur_Tunnel_free_ethiopian",
+    "@freeinternat10",
+]
 
-# 2. የእርስዎን 2 ቻናሎች ብቻ ማስገባት
-REQUIRED_CHANNELS = ['@Nur_Tunnel_free_ethiopian', '@freeinternat10']
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("netx")
+bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
+session = requests.Session()
+session.headers.update({"User-Agent": "NetX-Tools-Pro/1.0"})
+app = Flask(__name__)
 
-# 3. ቻናሎችን የማረጋገጫ ፋንክሽን
+def normalize_domain(raw):
+    if not raw:
+        return None
+    value = raw.strip().lower()
+    value = re.sub(r"^https?://", "", value)
+    value = value.split("/")[0].split("?")[0].split("#")[0]
+    value = value.split(":")[0].rstrip(".")
+    if len(value) > 253 or "." not in value:
+        return None
+    labels = value.split(".")
+    for label in labels:
+        if not label or len(label) > 63:
+            return None
+        if not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label
+        ):
+            return None
+    if not re.fullmatch(r"[a-z]{2,63}", labels[-1]):
+        return None
+    return value
+
+def esc(value):
+    value = str(value if value is not None else "N/A")
+    return (value.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;"))
+
 def check_subscription(user_id):
     for channel in REQUIRED_CHANNELS:
         try:
             member = bot.get_chat_member(channel, user_id)
-            if member.status not in ['creator', 'administrator', 'member']:
+            if member.status not in ("creator", "administrator", "member"):
                 return False
-        except Exception as e:
-            print(f"Error checking channel {channel}: {e}")
+        except Exception:
+            log.exception("Membership check failed: %s", channel)
             return False
     return True
 
-# 4. የታችኛው Reply Keyboard Menu
-def get_new_reply_keyboard():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+def keyboard():
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True, row_width=2
+    )
     markup.add(
         types.KeyboardButton("🌐 Subdomain Finder"),
         types.KeyboardButton("📡 Web Host Scanner"),
-        types.KeyboardButton("📁 Bulk Bug Host Checker (.txt)"),
+        types.KeyboardButton("📁 Bulk Domain Checker (.txt)"),
         types.KeyboardButton("🔍 DNS Lookup"),
         types.KeyboardButton("🔍 Domain & IP Recon"),
         types.KeyboardButton("🖼️ Image Info & Editor"),
         types.KeyboardButton("📢 PROMOTION MARKET"),
-        types.KeyboardButton("🆘 Help / How to Use")
+        types.KeyboardButton("🆘 Help / How to Use"),
     )
     return markup
 
-# 5. /start ትእዛዝ
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    chat_id = message.chat.id
-    
-    if not check_subscription(chat_id):
-        markup = types.InlineKeyboardMarkup()
-        for ch in REQUIRED_CHANNELS:
-            markup.add(types.InlineKeyboardButton(f"Join {ch}", url=f"https://t.me/{ch[1:]}"))
-        markup.add(types.InlineKeyboardButton("✅ Checked / ቼክ አድርግ", callback_data="check_sub"))
-        
-        bot.send_message(
-            chat_id, 
-            "⚠️ **ቦቱን ከመጠቀምዎ በፊት ከታች ያሉትን 2 ቻናሎች መቀላቀል አለብዎት!**\n\nእባክዎ ቻናሎቹን ይቀላቀሉና 'Checked' የሚለውን ይጫኑ።",
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-        return
-
+def require_membership(message):
+    if check_subscription(message.from_user.id):
+        return True
+    markup = types.InlineKeyboardMarkup()
+    for channel in REQUIRED_CHANNELS:
+        markup.add(types.InlineKeyboardButton(
+            f"Join {channel}",
+            url=f"https://t.me/{channel.lstrip('@')}"
+        ))
+    markup.add(types.InlineKeyboardButton(
+        "✅ Check membership", callback_data="check_sub"
+    ))
     bot.send_message(
-        chat_id, 
-        "🛡️ **NetX Tools Pro Bot**\n\n"
-        "🚀 ቦቱ ተመልሶ ሙሉ በሙሉ ስራ ጀምሯል!\n"
-        "ማከናወን የሚፈልጉትን አገልግሎት ከታች ካለው ሜኑ ይምረጡ፦",
-        reply_markup=get_new_reply_keyboard(),
-        parse_mode="Markdown"
+        message.chat.id,
+        "⚠️ ቦቱን ለመጠቀም ሁለቱንም ቻናሎች ይቀላቀሉ።",
+        reply_markup=markup
+    )
+    return False
+
+def ask_domain(message, prompt, callback):
+    msg = bot.send_message(message.chat.id, prompt)
+    bot.register_next_step_handler(msg, callback)
+
+@bot.message_handler(commands=["start", "menu"])
+def start(message):
+    if not require_membership(message):
+        return
+    bot.send_message(
+        message.chat.id,
+        "🛡️ <b>NetX Tools Pro</b>\n\n"
+        "ከታች ያለውን ሜኑ ይምረጡ።",
+        reply_markup=keyboard()
     )
 
-# 6. የቻናል ማረጋገጫ Callback
-@bot.callback_query_handler(func=lambda call: call.data == "check_sub")
-def callback_check_sub(call):
-    chat_id = call.message.chat.id
-    if check_subscription(chat_id):
-        bot.answer_callback_query(call.id, "✅ ማረጋገጫው ተሳክቷል!")
+@bot.callback_query_handler(func=lambda c: c.data == "check_sub")
+def check_sub_callback(call):
+    if check_subscription(call.from_user.id):
+        bot.answer_callback_query(call.id, "Membership confirmed!")
         try:
-            bot.delete_message(chat_id, call.message.message_id)
-        except:
+            bot.delete_message(
+                call.message.chat.id, call.message.message_id
+            )
+        except Exception:
             pass
         bot.send_message(
-            chat_id, 
-            "🎉 **እንኳን ደህና መጡ! NetX Tools ሙሉ በሙሉ ስራ ጀምሯል!**",
-            reply_markup=get_new_reply_keyboard(),
-            parse_mode="Markdown"
+            call.message.chat.id,
+            "✅ አባልነት ተረጋግጧል።",
+            reply_markup=keyboard()
         )
     else:
-        bot.answer_callback_query(call.id, "❌ እባክዎ በመጀመሪያ ሁለቱን ቻናሎች ይቀላቀሉ!", show_alert=True)
-
-# 7. የጽሁፍ እና የሜኑ ትእዛዞች ማስተናገጃ
-@bot.message_handler(func=lambda message: True, content_types=['text'])
-def handle_menu_text(message):
-    chat_id = message.chat.id
-    text = message.text.strip()
-
-    if not check_subscription(chat_id):
-        send_welcome(message)
-        return
-
-    if text == "🌐 Subdomain Finder":
-        msg = bot.send_message(chat_id, "🌐 **Super Subdomain Finder**\n\nእባክዎ መቃኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_super_subdomain)
-
-    elif text == "📡 Web Host Scanner":
-        msg = bot.send_message(chat_id, "📡 **Web Host Scanner (Pro Analysis)**\n\nእባክዎ መቃኘት የሚፈልጉትን ሆስት ወይም ዶሜይን ይላኩ (ለምሳሌ: `Auth.fayda.et`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_web_scanner_pro)
-
-    elif text == "📁 Bulk Bug Host Checker (.txt)":
-        bot.send_message(
-            chat_id, 
-            "📁 **Bulk Bug Host Checker (.txt)**\n\n"
-            "እባክዎ በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ሁሉንም በአንድ ላይ ስካን አድርጎ ትክክለኛ የባግ ሆስት (CDN) እና ዝርዝር መረጃዎችን ለይቶ ያሳውቅዎታል።", 
-            parse_mode="Markdown"
+        bot.answer_callback_query(
+            call.id,
+            "ሁለቱንም ቻናሎች ይቀላቀሉ።",
+            show_alert=True
         )
 
+@bot.message_handler(
+    func=lambda m: bool(m.text) and not m.text.startswith("/")
+)
+def menu_handler(message):
+    if not require_membership(message):
+        return
+
+    text = message.text.strip()
+    if text == "🌐 Subdomain Finder":
+        ask_domain(
+            message, "Domain ይላኩ (ለምሳሌ example.com):",
+            subdomain_handler
+        )
+    elif text == "📡 Web Host Scanner":
+        ask_domain(
+            message, "ለመፈተሽ ፈቃድ ያለዎትን domain ይላኩ:",
+            host_scan_handler
+        )
     elif text == "🔍 DNS Lookup":
-        msg = bot.send_message(chat_id, "🔍 **DNS Lookup**\n\nእባክዎ የዲ ኤን ኤስ መረጃ ማግኘት የሚፈልጉትን ዶሜይን ይላኩ (ለምሳሌ: `google.com`):", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_dns_lookup)
-
+        ask_domain(message, "Domain ይላኩ:", dns_handler)
     elif text == "🔍 Domain & IP Recon":
-        msg = bot.send_message(chat_id, "🔍 **Domain & IP Recon**\n\nእባክዎ IP አድራሻ ወይም ዶሜይን ይላኩ:", parse_mode="Markdown")
-        bot.register_next_step_handler(msg, process_ip_recon)
-
+        ask_domain(message, "Domain ወይም IP ይላኩ:", recon_handler)
+    elif text == "📁 Bulk Domain Checker (.txt)":
+        bot.send_message(
+            message.chat.id,
+            "አንድ domain በአንድ መስመር የያዘ .txt ፋይል ይላኩ።"
+        )
     elif text == "🖼️ Image Info & Editor":
-        bot.send_message(chat_id, "🖼️ **Image Info & Editor**\n\nእባክዎ መረጃውን ማወቅ ወይም ጽሁፍ መፃፍ የሚፈልጉበትን ምስል (Photo) ይላኩ። ከምስሉ ጋር ጽሁፍ (Caption) ካካተቱ ምስሉ ላይ ይፃፋል!", parse_mode="Markdown")
-
+        bot.send_message(
+            message.chat.id,
+            "Photo ይላኩ። Caption ካካተቱ በምስሉ ላይ ይጨመራል።"
+        )
     elif text == "📢 PROMOTION MARKET":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("💬 Contact Admin (VIP)", url=ADMIN_LINK))
+        markup.add(types.InlineKeyboardButton(
+            "Contact Admin", url=ADMIN_LINK
+        ))
         bot.send_message(
-            chat_id, 
-            "📢 **PROMOTION MARKET**\n\n"
-            "ማስታወቂያዎችን፣ ቦቶችን እና የቻናል እድገት አገልግሎቶችን ለማግኘት ከታች ያለውን ሊንክ በመጫን ያነጋግሩን፦",
-            reply_markup=markup,
-            parse_mode="Markdown"
+            message.chat.id, "Promotion / support:",
+            reply_markup=markup
         )
-
     elif text == "🆘 Help / How to Use":
         bot.send_message(
-            chat_id, 
-            "🆘 **እርዳታ እና አጠቃቀም**\n\n"
-            "• **Subdomain Finder:** ከ 500 በላይ ንዑስ ዶሜይኖችን በጥልቀት ፈልጎ በፋይል መልክ ያስቀምጣል።\n"
-            "• **Bulk Bug Host Checker:** የ `.txt` ፋይል ተቀብሎ ትክክለኛ CDN እና ስርጭት ያላቸውን የባግ ሆስቶች በዝርዝር ያወጣል።",
-            parse_mode="Markdown"
+            message.chat.id,
+            "<b>Help</b>\n"
+            "• Subdomain Finder: public certificate records.\n"
+            "• DNS Lookup: DNS resolution.\n"
+            "• Host Scanner: basic HTTP/HTTPS check.\n"
+            "• Bulk Checker: send a .txt file.\n"
+            "• Image: send a photo with optional caption."
         )
     else:
-        msg = bot.send_message(chat_id, f"🌐 **Super Subdomain Finder**\n\nለ `{text}` ንዑስ-ዶሜይኖች ከሁሉም ሰርቨሮች በጥልቀት በመሰብሰብ ላይ...", parse_mode="Markdown")
-        process_subdomain_direct(chat_id, text, msg.message_id)
+        bot.send_message(
+            message.chat.id, "ከሜኑ ውስጥ አንዱን ይምረጡ።",
+            reply_markup=keyboard()
+        )
 
-# 8. 📁 Bulk Bug Host Checker (የተስተካከለ እና የሚያምር ዝርዝር መረጃ ሰጪ)
-@bot.message_handler(content_types=['document'])
-def handle_document(message):
-    chat_id = message.chat.id
-
-    if not check_subscription(chat_id):
-        send_welcome(message)
+def subdomain_handler(message):
+    domain = normalize_domain(message.text or "")
+    if not domain:
+        bot.send_message(message.chat.id, "⚠️ ትክክለኛ domain ይላኩ።")
         return
 
-    if not message.document.file_name.endswith('.txt'):
-        bot.send_message(chat_id, "⚠️ እባክዎ የ **`.txt`** ፋይል ብቻ ይላኩ!")
-        return
-
-    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደ እና ሁሉም ሆስቶች በዝርዝር መረጃ እየተቃኙ ነው... እባክዎ ይጠብቁ...", parse_mode="Markdown")
-
+    status = bot.send_message(
+        message.chat.id,
+        f"🔎 <code>{esc(domain)}</code> በመፈለግ ላይ..."
+    )
     try:
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        content = downloaded_file.decode('utf-8', errors='ignore')
+        response = session.get(
+            "https://crt.sh/",
+            params={"q": f"%.{domain}", "output": "json"},
+            timeout=(5, 20)
+        )
+        response.raise_for_status()
+        data = response.json()
+        found = set()
 
-        domains = [line.strip().replace("https://", "").replace("http://", "").split("/")[0] 
-                   for line in content.splitlines() if line.strip()]
+        for item in data if isinstance(data, list) else []:
+            for name in str(item.get("name_value", "")).splitlines():
+                name = name.strip().lower().lstrip("*.")
+                if name == domain or name.endswith("." + domain):
+                    if normalize_domain(name):
+                        found.add(name)
 
-        domains = list(set(domains))
-
-        if not domains:
-            bot.edit_message_text("⚠️ በፋይሉ ውስጥ ምንም ትክክለኛ ዶሜይን አልተገኘም።", chat_id, processing_msg.message_id)
+        if not found:
+            bot.edit_message_text(
+                f"⚠️ <code>{esc(domain)}</code> ላይ ውጤት አልተገኘም።",
+                message.chat.id, status.message_id
+            )
             return
 
-        valid_bug_hosts = []
+        output = io.BytesIO(
+            "\n".join(sorted(found)).encode("utf-8")
+        )
+        output.name = f"{domain}_subdomains.txt"
 
+        try:
+            bot.delete_message(
+                message.chat.id, status.message_id
+            )
+        except Exception:
+            pass
+
+        bot.send_document(
+            message.chat.id, output,
+            caption=(
+                f"✅ <b>Subdomain results</b>\n"
+                f"Domain: <code>{esc(domain)}</code>\n"
+                f"Count: <b>{len(found)}</b>\n"
+                "Records do not guarantee that hosts are active."
+            )
+        )
+    except Exception:
+        log.exception("Subdomain lookup failed for %s", domain)
+        try:
+            bot.edit_message_text(
+                "❌ ፍለጋው አልተሳካም። Render Logs ይመልከቱ።",
+                message.chat.id, status.message_id
+            )
+        except Exception:
+            pass
+
+def dns_handler(message):
+    domain = normalize_domain(message.text or "")
+    if not domain:
+        bot.send_message(message.chat.id, "⚠️ ትክክለኛ domain ይላኩ።")
+        return
+    try:
+        records = socket.getaddrinfo(
+            domain, None, type=socket.SOCK_STREAM
+        )
+        ips = sorted({item[4][0] for item in records})
+        bot.send_message(
+            message.chat.id,
+            f"🔍 <b>DNS result</b>\n"
+            f"Domain: <code>{esc(domain)}</code>\n"
+            + "\n".join(f"• <code>{esc(ip)}</code>" for ip in ips[:20])
+        )
+    except Exception:
+        log.exception("DNS lookup failed")
+        bot.send_message(message.chat.id, "❌ DNS lookup አልተሳካም።")
+
+def recon_handler(message):
+    raw = (message.text or "").strip()
+    try:
+        if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", raw):
+            ip = raw
+        else:
+            domain = normalize_domain(raw)
+            if not domain:
+                raise ValueError("Invalid domain or IP")
+            ip = socket.gethostbyname(domain)
+
+        result = session.get(
+            f"http://ip-api.com/json/{quote(ip)}",
+            timeout=(5, 10)
+        ).json()
+        if result.get("status") != "success":
+            raise ValueError("IP information unavailable")
+
+        bot.send_message(
+            message.chat.id,
+            f"🔍 <b>IP information</b>\n"
+            f"Target: <code>{esc(raw)}</code>\n"
+            f"IP: <code>{esc(ip)}</code>\n"
+            f"Country: {esc(result.get('country'))}\n"
+            f"City: {esc(result.get('city'))}\n"
+            f"ISP: {esc(result.get('isp'))}"
+        )
+    except Exception:
+        log.exception("Recon failed")
+        bot.send_message(message.chat.id, "❌ መረጃውን ማግኘት አልተቻለም።")
+
+def host_scan_handler(message):
+    domain = normalize_domain(message.text or "")
+    if not domain:
+        bot.send_message(message.chat.id, "⚠️ ትክክለኛ domain ይላኩ።")
+        return
+
+    results = []
+    for scheme in ("https", "http"):
+        try:
+            response = session.get(
+                f"{scheme}://{domain}/",
+                timeout=(5, 10),
+                allow_redirects=True
+            )
+            results.append(
+                f"• {scheme.upper()}: HTTP {response.status_code}; "
+                f"Server: {esc(response.headers.get('Server', 'unknown'))}"
+            )
+        except requests.RequestException:
+            results.append(f"• {scheme.upper()}: unavailable")
+
+    bot.send_message(
+        message.chat.id,
+        f"📡 <b>Basic host check</b>\n"
+        f"Domain: <code>{esc(domain)}</code>\n"
+        + "\n".join(results)
+        + "\nHTTP status alone does not identify a VPN/bypass host."
+    )
+
+@bot.message_handler(content_types=["document"])
+def document_handler(message):
+    if not require_membership(message):
+        return
+
+    document = message.document
+    if not document.file_name or not document.file_name.lower().endswith(".txt"):
+        bot.send_message(message.chat.id, "⚠️ .txt ፋይል ብቻ ይላኩ።")
+        return
+    if document.file_size and document.file_size > 1_000_000:
+        bot.send_message(message.chat.id, "⚠️ ፋይሉ ከ1 MB በታች ይሁን።")
+        return
+
+    status = bot.send_message(message.chat.id, "⏳ ፋይሉ እየተፈተሸ ነው...")
+    try:
+        info = bot.get_file(document.file_id)
+        raw = bot.download_file(info.file_path).decode(
+            "utf-8", errors="replace"
+        )
+        domains = []
+        for line in raw.splitlines():
+            domain = normalize_domain(line)
+            if domain and domain not in domains:
+                domains.append(domain)
+            if len(domains) >= 100:
+                break
+
+        if not domains:
+            bot.edit_message_text(
+                "⚠️ ትክክለኛ domain አልተገኘም።",
+                message.chat.id, status.message_id
+            )
+            return
+
+        lines = []
         for domain in domains:
             try:
                 ip = socket.gethostbyname(domain)
-                r = requests.get(f"http://{domain}", timeout=3, allow_redirects=True)
-                server = r.headers.get('Server', 'Unknown')
-                status = r.status_code
-                
-                # ትክክለኛ ከፍ ያለ አቅም ያላቸው ሆስቶች
-                if status in [200, 301, 302, 403, 405]:
-                    host_info = f"• `http://{domain}`\n  └ IP: `{ip}` | Status: `{status}` | Server: `{server}`"
-                    valid_bug_hosts.append(host_info)
-            except:
-                continue
+                try:
+                    r = session.get(
+                        f"https://{domain}/", timeout=8
+                    )
+                    web = f"HTTPS {r.status_code}"
+                except requests.RequestException:
+                    web = "HTTPS unavailable"
+                lines.append(f"{domain}\t{ip}\t{web}")
+            except Exception:
+                lines.append(f"{domain}\tDNS_FAILED\t-")
 
-        report = f"📊 **BULK BUG HOST SCAN REPORT**\n\n"
-        report += f"📌 Total Scanned: `{len(domains)}`\n"
-        report += f"🎯 Working Bug Hosts: `{len(valid_bug_hosts)}`\n\n"
-
-        if valid_bug_hosts:
-            report += "🔥 **Active Working Hosts:**\n\n" + "\n\n".join(valid_bug_hosts[:30])
-        else:
-            report += "⚠️ ምንም የሚሰራ ሆስት በፋይሉ ውስጥ አልተገኘም።"
-
-        bot.delete_message(chat_id, processing_msg.message_id)
-        
-        if len(report) > 4000:
-            file_io = io.BytesIO(report.encode('utf-8'))
-            file_io.name = "scan_detailed_report.txt"
-            bot.send_document(chat_id, file_io, caption="✅ **የስካን ሪፖርቱ ስለረዘመ በሰነድ መልክ ተልኳል**", parse_mode="Markdown")
-        else:
-            bot.send_message(chat_id, report, parse_mode="Markdown")
-
-    except Exception as e:
-        bot.edit_message_text(f"❌ ፋይሉን በማንበብ ላይ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
-
-# 9. 🌐 Subdomain Finder (እንደ ዱሮው ከ 500 በላይ ንዑስ ዶሜይኖችን በጥልቀት የሚያመጣ)
-def process_super_subdomain(message):
-    chat_id = message.chat.id
-    if not message.text:
-        return
-    query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ከ 500 በላይ ንዑስ-ዶሜይኖች ከበርካታ ሰርቨሮች በጥልቀት በመሰብሰብ ላይ... እባክዎ ይጠብቁ...", parse_mode="Markdown")
-    process_subdomain_direct(chat_id, query, processing_msg.message_id)
-
-def process_subdomain_direct(chat_id, query, msg_id):
-    subdomains = set()
-    
-    # 1. ከ crt.sh በ HTML/Text መልክ (ብዙ ውጤቶችን ለማምጣት)
-    try:
-        url = f"https://crt.sh/?q=%25.{query}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        response = requests.get(url, headers=headers, timeout=30)
-        if response.status_code == 200:
-            import re
-            matches = re.findall(r'<TD>([a-zA-Z0-9.-]+\.' + re.escape(query) + r')</TD>', response.text)
-            for sub in matches:
-                sub = sub.strip().lower()
-                if sub and not sub.startswith('*'):
-                    subdomains.add(sub)
-    except:
-        pass
-
-    # 2. ከ HackerTarget API
-    try:
-        alt_url = f"https://api.hackertarget.com/hostsearch/?q={query}"
-        res = requests.get(alt_url, timeout=15)
-        if res.status_code == 200 and "API count exceeded" not in res.text:
-            for line in res.text.splitlines():
-                parts = line.split(',')
-                if len(parts) > 0:
-                    sub = parts[0].strip().lower()
-                    if sub and sub.endswith(query):
-                        subdomains.add(sub)
-    except:
-        pass
-
-    # 3. ከ BufferOver.run API
-    try:
-        buf_url = f"https://dns.bufferover.run/dns?q=.{query}"
-        res = requests.get(buf_url, timeout=15)
-        if res.status_code == 200:
-            data = res.json()
-            for item in data.get('FD_ALL', []) + data.get('RD_ALL', []):
-                parts = item.split(',')
-                if len(parts) > 1:
-                    sub = parts[1].strip().lower()
-                    if sub and not sub.startswith('*') and sub.endswith(query):
-                        subdomains.add(sub)
-    except:
-        pass
-
-    try:
-        subdomain_list = sorted(list(subdomains))
-        if subdomain_list:
-            try:
-                bot.delete_message(chat_id, msg_id)
-            except:
-                pass
-            
-            file_content = "\n".join(subdomain_list)
-            file_io = io.BytesIO(file_content.encode('utf-8'))
-            file_io.name = f"{query}_all_subdomains.txt"
-            bot.send_document(
-                chat_id, 
-                file_io, 
-                caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nሁሉም ውጤቶች በሰነድ (.txt) ፋይል ተያይዘዋል!",
-                parse_mode="Markdown"
-            )
-        else:
-            bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን ማግኘት አልተቻለም።", chat_id, msg_id, parse_mode="Markdown")
-    except Exception as e:
+        output = io.BytesIO(
+            ("DOMAIN\tIP\tHTTP_STATUS\n" + "\n".join(lines)).encode()
+        )
+        output.name = "domain_check_report.txt"
         try:
-            bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, msg_id)
-        except:
+            bot.delete_message(message.chat.id, status.message_id)
+        except Exception:
             pass
-
-# 10. 🔍 DNS Lookup Handler
-def process_dns_lookup(message):
-    chat_id = message.chat.id
-    if not message.text:
-        return
-    domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-
-    processing_msg = bot.send_message(chat_id, f"🔍 የ `{domain}` ዲ ኤን ኤስ መረጃ በመፈለግ ላይ...", parse_mode="Markdown")
-
-    try:
-        ip = socket.gethostbyname(domain)
-        geo_res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-        
-        result = (
-            f"🔍 **DNS LOOKUP RESULT**\n\n"
-            f"📌 **Domain:** `{domain}`\n"
-            f"🌐 **Resolved IP:** `{ip}`\n"
-            f"🌍 **Country:** `{geo_res.get('country', 'N/A')}`\n"
-            f"🏙️ **City:** `{geo_res.get('city', 'N/A')}`\n"
-            f"🏢 **ISP/Org:** `{geo_res.get('isp', 'N/A')}`\n"
-            f"📡 **ASN:** `{geo_res.get('as', 'N/A')}`"
+        bot.send_document(
+            message.chat.id, output,
+            caption=f"✅ Checked {len(domains)} domains."
         )
-        bot.delete_message(chat_id, processing_msg.message_id)
-        bot.send_message(chat_id, result, parse_mode="Markdown")
-    except Exception as e:
-        bot.edit_message_text(f"❌ የዲ ኤን ኤስ መረጃ ማግኘት አልተቻለም: {e}", chat_id, processing_msg.message_id)
+    except Exception:
+        log.exception("Document processing failed")
+        bot.send_message(message.chat.id, "❌ ፋይሉን ማንበብ አልተቻለም።")
 
-# 11. 📡 Web Host Scanner Pro
-def process_web_scanner_pro(message):
-    chat_id = message.chat.id
-    if not message.text:
+@bot.message_handler(content_types=["photo"])
+def photo_handler(message):
+    if not require_membership(message):
         return
-    domain = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-
-    processing_msg = bot.send_message(chat_id, f"📡 **{domain}** መረጃውን በዝርዝር እያመጣ ነው፣ እባክዎ ይጠብቁ...", parse_mode="Markdown")
-
     try:
-        ip = socket.gethostbyname(domain)
-        
-        ports_to_check = [
-            ("HTTP:80", f"http://{domain}:80"),
-            ("HTTPS:443", f"https://{domain}:443"),
-            ("HTTP:8080", f"http://{domain}:8080"),
-            ("HTTPS:8443", f"https://{domain}:8443")
-        ]
+        info = bot.get_file(message.photo[-1].file_id)
+        raw = bot.download_file(info.file_path)
+        image = Image.open(io.BytesIO(raw))
+        width, height = image.size
+        image_format = image.format or "Unknown"
+        caption = (message.caption or "").strip()
 
-        port_results = []
-        for name, url in ports_to_check:
-            try:
-                r = requests.get(url, timeout=4, allow_redirects=True)
-                server = r.headers.get('Server', 'nginx')
-                
-                status_line = f"🔷 **{name}** ➔ ✅ **OPEN**\n   • Status: `{r.status_code}`\n   • Bug Host CDN: ✅ **Yes**\n   • Server: `{server}`"
-                port_results.append(status_line)
-            except:
-                port_results.append(f"🔷 **{name}** ➔ ❌ **Timed Out**")
-
-        report = (
-            f"╔══════════════════════════════╗\n"
-            f"║    🛡️ **WEB HOST SCANNER**    ║\n"
-            f"╚══════════════════════════════╝\n\n"
-            f"🎯 **Domain:** `{domain}`\n"
-            f"📌 **IPs:** `{ip}`\n\n" +
-            "\n\n".join(port_results)
-        )
-
-        bot.delete_message(chat_id, processing_msg.message_id)
-        bot.send_message(chat_id, report, parse_mode="Markdown")
-
-    except Exception as e:
-        bot.edit_message_text(f"❌ ሆስቱ አልተገኘም: {e}", chat_id, processing_msg.message_id)
-
-# 12. 🔍 Domain & IP Recon
-def process_ip_recon(message):
-    chat_id = message.chat.id
-    if not message.text:
-        return
-    target = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-
-    try:
-        ip = socket.gethostbyname(target)
-        res = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-
-        if res.get('status') == 'success':
-            text = (
-                f"🔍 **IP Recon Report:**\n\n"
-                f"📌 **Target:** `{target}`\n"
-                f"🌐 **IP:** `{ip}`\n"
-                f"🌍 **Country:** `{res.get('country')}`\n"
-                f"🏙️ **City:** `{res.get('city')}`\n"
-                f"🏢 **ISP:** `{res.get('isp')}`"
+        if not caption:
+            bot.send_message(
+                message.chat.id,
+                f"🖼️ <b>Image information</b>\n"
+                f"Resolution: <code>{width}x{height}</code>\n"
+                f"Format: <code>{esc(image_format)}</code>\n"
+                f"Size: <code>{len(raw)/1024:.1f} KB</code>"
             )
-            bot.send_message(chat_id, text, parse_mode="Markdown")
-        else:
-            bot.send_message(chat_id, f"⚠️ መረጃ ማግኘት አልተቻለም። IP: `{ip}`", parse_mode="Markdown")
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
+            return
 
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default()
+        max_width = max(100, image.width - 24)
+        words, lines, current = caption.split(), [], ""
 
+        for word in words:
+            trial = f"{current} {word}".strip()
+            if draw.textbbox((0, 0), trial, font=font)[2] <= max_width:
+                current = trial
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
 
-# 14. Flask Server for Render
-app = Flask('')
+        line_height = 18
+        box_height = min(image.height, len(lines) * line_height + 20)
+        draw.rectangle(
+            (0, image.height-box_height, image.width, image.height),
+            fill=(0, 0, 0)
+        )
+        y = image.height - box_height + 10
+        for line in lines:
+            if y + line_height > image.height:
+                break
+            draw.text((12, y), line, fill=(255, 255, 255), font=font)
+            y += line_height
 
-@app.route('/')
+        output = io.BytesIO()
+        image.save(output, format="JPEG", quality=92)
+        output.seek(0)
+        output.name = "edited_image.jpg"
+        bot.send_photo(
+            message.chat.id, output,
+            caption=f"🖼️ Edited image\nResolution: {width}x{height}"
+        )
+    except Exception:
+        log.exception("Photo processing failed")
+        bot.send_message(message.chat.id, "❌ ምስሉን ማስኬድ አልተቻለም።")
+
+@app.get("/")
 def home():
-    return "NetX Tools Pro Bot is running successfully!"
+    return "NetX Tools Pro Bot is running.", 200
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}, 200
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    port = int(os.environ.get("PORT", "8080"))
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask)
-    t.start()
-    
-    print("Bot is starting polling...")
-    bot.infinity_polling()
+    threading.Thread(target=run_flask, daemon=True).start()
+    log.info("NetX Tools Pro bot starting")
+    bot.infinity_polling(
+        skip_pending=True, timeout=30, long_polling_timeout=30
+    )
