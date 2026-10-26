@@ -224,31 +224,30 @@ def handle_document(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 🌐 Subdomain Finder (እንደ ዱሮው ከ 500 በላይ ንዑስ ዶሜይኖችን በአንድ ላይ የሚያመጣ)
+# 9. 🌐 Subdomain Finder (ከ AlienVault, HackerTarget እና BufferOver በከፍተኛ ፍጥነት የሚሰበስብ)
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
         return
     query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ከ 500 በላይ ንዑስ-ዶሜይኖች በልዩ ፍለጋ በመሰብሰብ ላይ... እባክዎ ይጠብቁ...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` Domain በመፈለግ ላይ... እባክዎ ይጠብቁ...", parse_mode="Markdown")
     process_subdomain_direct(chat_id, query, processing_msg.message_id)
 
 def process_subdomain_direct(chat_id, query, msg_id):
     subdomains = set()
     
-    # 1. ከ crt.sh በ HTML/Text መልክ (ብዙ ውጤቶችን ለማምጣት)
+    # 1. ከ AlienVault OTX API (ብዙ ንዑስ ዶሜይኖችን ያለ ገደብ የሚያመጣ)
     try:
-        url = f"https://crt.sh/?q=%25.{query}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        response = requests.get(url, headers=headers, timeout=30)
-        if response.status_code == 200:
-            import re
-            # በ HTML ውስጥ ያሉትን ዶሜይኖች በ Regex መለየት
-            matches = re.findall(r'<TD>([a-zA-Z0-9.-]+\.' + re.escape(query) + r')</TD>', response.text)
-            for sub in matches:
-                sub = sub.strip().lower()
-                if sub and not sub.startswith('*'):
-                    subdomains.add(sub)
+        otx_url = f"https://otx.alienvault.com/api/v1/indicators/domain/{query}/passive_dns"
+        res = requests.get(otx_url, timeout=20)
+        if res.status_code == 200:
+            data = res.json()
+            for record in data.get('passive_dns', []):
+                hostname = record.get('hostname')
+                if hostname:
+                    sub = hostname.strip().lower()
+                    if sub and sub.endswith(query) and not sub.startswith('*'):
+                        subdomains.add(sub)
     except:
         pass
 
@@ -289,14 +288,14 @@ def process_subdomain_direct(chat_id, query, msg_id):
             except:
                 pass
             
-            # ውጤቱ ብዙ ስለሚሆን በፋይል (.txt) መልክ ይላካል
+            # ውጤቶቹ በሙሉ በሰነድ ፋይል (.txt) ይላካሉ
             file_content = "\n".join(subdomain_list)
             file_io = io.BytesIO(file_content.encode('utf-8'))
             file_io.name = f"{query}_subdomains.txt"
             bot.send_document(
                 chat_id, 
                 file_io, 
-                caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nሁሉም ውጤቶች በሰነድ (.txt) ፋይል ተያይዘዋል!",
+                caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nሁሉም ዶሜይኖች በሰነድ (.txt) ፋይል ተያይዘዋል!",
                 parse_mode="Markdown"
             )
         else:
