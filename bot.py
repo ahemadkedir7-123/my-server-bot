@@ -220,49 +220,49 @@ def handle_document(message):
     except Exception as e:
         bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 🌐 Subdomain Finder (ብዙ ሰርቨሮችን በመጠቀም አንድም ሳይቀር ማምጣት)
+# 9. 🌐 Subdomain Finder (አንድም ሳይቀር ሙሉ በሙሉ የሚያመጣ)
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
         return
     query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ንዑስ-ዶሜይኖች ከበርካታ ሰርቨሮች በመሰብሰብ ላይ...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ንዑስ-ዶሜይኖች ከሁሉም ሰርቨሮች በጥልቀት በመፈለግ ላይ... እባክዎ ትንሽ ይጠብቁ...", parse_mode="Markdown")
     process_subdomain_direct(chat_id, query, processing_msg.message_id)
 
 def process_subdomain_direct(chat_id, query, msg_id):
     subdomains = set()
     
-    # 1. ከ crt.sh ማውጣት
+    # 1. ከ crt.sh (በተለያዩ ዌይ አውቶች)
     try:
         url = f"https://crt.sh/?q=%25.{query}&output=json"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=20)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=25)
         if response.status_code == 200:
             for entry in response.json():
                 name_value = entry.get('name_value')
                 if name_value:
                     for sub in name_value.split('\n'):
-                        sub = sub.strip()
-                        if sub and not sub.startswith('*'):
+                        sub = sub.strip().lower()
+                        if sub and not sub.startswith('*') and sub.endswith(query):
                             subdomains.add(sub)
     except:
         pass
 
-    # 2. ከ HackerTarget API ማውጣት
+    # 2. ከ HackerTarget API
     try:
         alt_url = f"https://api.hackertarget.com/hostsearch/?q={query}"
         res = requests.get(alt_url, timeout=15)
-        if res.status_code == 200 and "API count exceeded" not in res.text:
+        if res.status_code == 200 and "API count exceeded" not in res.text and "error" not in res.text.lower():
             for line in res.text.splitlines():
                 parts = line.split(',')
                 if len(parts) > 0:
-                    sub = parts[0].strip()
-                    if sub:
+                    sub = parts[0].strip().lower()
+                    if sub and sub.endswith(query):
                         subdomains.add(sub)
     except:
         pass
 
-    # 3. ከ BufferOver.run API ማውጣት (ለተጨማሪ ውጤቶች)
+    # 3. ከ BufferOver.run API
     try:
         buf_url = f"https://dns.bufferover.run/dns?q=.{query}"
         res = requests.get(buf_url, timeout=15)
@@ -271,9 +271,24 @@ def process_subdomain_direct(chat_id, query, msg_id):
             for item in data.get('FD_ALL', []) + data.get('RD_ALL', []):
                 parts = item.split(',')
                 if len(parts) > 1:
-                    sub = parts[1].strip()
-                    if sub and not sub.startswith('*'):
+                    sub = parts[1].strip().lower()
+                    if sub and not sub.startswith('*') and sub.endswith(query):
                         subdomains.add(sub)
+    except:
+        pass
+
+    # 4. ከ ThreatCrowd API (ለተጨማሪ ጥልቀት)
+    try:
+        tc_url = f"https://www.threatcrowd.org/searchApi/v2/domain/report.html?domain={query}"
+        res = requests.get(tc_url, timeout=10)
+        if res.status_code == 200:
+            # ራሱን የቻለ  টেকስት ፍለጋ
+            import re
+            found = re.findall(r'[\w.-]+\.' + re.escape(query), res.text)
+            for sub in found:
+                sub = sub.strip().lower()
+                if sub:
+                    subdomains.add(sub)
     except:
         pass
 
@@ -285,21 +300,22 @@ def process_subdomain_direct(chat_id, query, msg_id):
             except:
                 pass
             
-            if len(subdomain_list) > 10:
+            # ውጤቱ ከ 15 በላይ ሲሆን በፋይል መልክ መላክ
+            if len(subdomain_list) > 15:
                 file_content = "\n".join(subdomain_list)
                 file_io = io.BytesIO(file_content.encode('utf-8'))
-                file_io.name = f"{query}_subdomains.txt"
+                file_io.name = f"{query}_all_subdomains.txt"
                 bot.send_document(
                     chat_id, 
                     file_io, 
-                    caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\n ውጤቶቹ ከ 10 ስለበለጡ በፋይል መልክ ተልኳል።",
+                    caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nአንድም ሳይቀር በሰነድ (.txt) ፋይል ተያይዟል!",
                     parse_mode="Markdown"
                 )
             else:
                 result_text = f"✅ **የተገኙ ውጤቶች ({query}) [{len(subdomain_list)}]:**\n\n" + "\n".join([f"<code>{s}</code>" for s in subdomain_list])
                 bot.send_message(chat_id, result_text, parse_mode="HTML")
         else:
-            bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን አልተገኘም።", chat_id, msg_id, parse_mode="Markdown")
+            bot.edit_message_text(f"⚠️ ለ `{query}` ምንም ንዑስ ዶሜይን ማግኘት አልተቻለም። እባክዎ ትንሽ ቆይተው እንደገና ይሞክሩ።", chat_id, msg_id, parse_mode="Markdown")
     except Exception as e:
         try:
             bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, msg_id)
