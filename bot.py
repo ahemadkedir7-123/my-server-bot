@@ -13,7 +13,6 @@ from PIL import Image, ImageDraw
 TOKEN = "8788982436:AAHCZmgmksgz0EYg6vOqRd1Kk9Q4SOkPPnI"
 bot = telebot.TeleBot(TOKEN)
 
-
 # የፕሮሞሽን አድራሻ
 ADMIN_LINK = "https://t.me/Shemsadin_vip"
 
@@ -116,7 +115,7 @@ def handle_menu_text(message):
         bot.send_message(
             chat_id, 
             "📁 **Bulk Bug Host Checker (.txt)**\n\n"
-            "እባክዎ በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ትክክለኛ CDN/Cloud ያላቸውን የባግ ሆስቶች ብቻ ለይቶ ያሳውቅዎታል።", 
+            "እባክዎ በርካታ ዶሜይኖችን የያዘ **`.txt` ፋይል** ይላኩ። ቦቱ ሁሉንም በአንድ ላይ ስካን አድርጎ ትክክለኛ የባግ ሆስት (CDN) እና ዝርዝር መረጃዎችን ለይቶ ያሳውቅዎታል።", 
             parse_mode="Markdown"
         )
 
@@ -146,15 +145,15 @@ def handle_menu_text(message):
         bot.send_message(
             chat_id, 
             "🆘 **እርዳታ እና አጠቃቀም**\n\n"
-            "• **Subdomain Finder:** ከሁሉም ትላልቅ ዳታቤዞች አንድም ሳይቀር ንዑስ-ዶሜይኖችን ያወጣል።\n"
-            "• **Bulk Bug Host Checker:** ትክክለኛ CDN (Cloudflare/CloudFront) ያላቸውን የባግ ሆስት ዶሜይኖች ብቻ ይለያል።",
+            "• **Subdomain Finder:** ከ 500 በላይ ንዑስ ዶሜይኖችን በጥልቀት ፈልጎ በፋይል መልክ ያስቀምጣል።\n"
+            "• **Bulk Bug Host Checker:** የ `.txt` ፋይል ተቀብሎ ትክክለኛ CDN እና ስርጭት ያላቸውን የባግ ሆስቶች በዝርዝር ያወጣል።",
             parse_mode="Markdown"
         )
     else:
-        msg = bot.send_message(chat_id, f"🌐 **Super Subdomain Finder**\n\nለ `{text}` ንዑስ-ዶሜይኖች ከሁሉም ሰርቨሮች በመሰብሰብ ላይ...", parse_mode="Markdown")
+        msg = bot.send_message(chat_id, f"🌐 **Super Subdomain Finder**\n\nለ `{text}` ንዑስ-ዶሜይኖች ከሁሉም ሰርቨሮች በጥልቀት በመሰብሰብ ላይ...", parse_mode="Markdown")
         process_subdomain_direct(chat_id, text, msg.message_id)
 
-# 8. 📁 Bulk Bug Host Checker (የተስተካከለ ጥብቅ ማጣሪያ)
+# 8. 📁 Bulk Bug Host Checker (የተስተካከለ እና የሚያምር ዝርዝር መረጃ ሰጪ)
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     chat_id = message.chat.id
@@ -167,7 +166,7 @@ def handle_document(message):
         bot.send_message(chat_id, "⚠️ እባክዎ የ **`.txt`** ፋይል ብቻ ይላኩ!")
         return
 
-    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደ እና ትክክለኛ የባግ ሆስት (CDN) ማጣሪያ እየተደረገባቸው ነው...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, "🔄 ፋይሉ እየወረደ እና ሁሉም ሆስቶች በዝርዝር መረጃ እየተቃኙ ነው... እባክዎ ይጠብቁ...", parse_mode="Markdown")
 
     try:
         file_info = bot.get_file(message.document.file_id)
@@ -187,67 +186,63 @@ def handle_document(message):
 
         for domain in domains:
             try:
-                r = requests.get(f"https://{domain}", timeout=3, allow_redirects=True)
-                server = r.headers.get('Server', '').lower()
-                via = r.headers.get('Via', '').lower()
-                x_cache = r.headers.get('X-Cache', '').lower()
+                ip = socket.gethostbyname(domain)
+                r = requests.get(f"http://{domain}", timeout=3, allow_redirects=True)
+                server = r.headers.get('Server', 'Unknown')
+                status = r.status_code
                 
-                if 'cloudflare' in server or 'cloudfront' in server or 'akamai' in server or 'cloudfront' in via or 'cloudfront' in x_cache or 'awselb' in server or r.status_code in [200, 301, 302, 403]:
-                    valid_bug_hosts.append(f"• `http://{domain}` (Server/CDN: `{r.headers.get('Server', 'Cloud/CDN')}`)")
+                # ትክክለኛ ከፍ ያለ አቅም ያላቸው ሆስቶች
+                if status in [200, 301, 302, 403, 405]:
+                    host_info = f"• `http://{domain}`\n  └ IP: `{ip}` | Status: `{status}` | Server: `{server}`"
+                    valid_bug_hosts.append(host_info)
             except:
-                try:
-                    r = requests.get(f"http://{domain}", timeout=3, allow_redirects=True)
-                    server = r.headers.get('Server', '').lower()
-                    if 'cloudflare' in server or 'cloudfront' in server or 'akamai' in server or r.status_code in [200, 301, 302, 403]:
-                        valid_bug_hosts.append(f"• `http://{domain}` (Server/CDN: `{r.headers.get('Server', 'Cloud/CDN')}`)")
-                except:
-                    continue
+                continue
 
-        report = f"📊 **BULK BUG HOST SCAN REPORT (FILTERED)**\n\n"
-        report += f"Total Scanned: `{len(domains)}`\n"
-        report += f"Valid Bug Hosts Found: `{len(valid_bug_hosts)}`\n\n"
+        report = f"📊 **BULK BUG HOST SCAN REPORT**\n\n"
+        report += f"📌 Total Scanned: `{len(domains)}`\n"
+        report += f"🎯 Working Bug Hosts: `{len(valid_bug_hosts)}`\n\n"
 
         if valid_bug_hosts:
-            report += "🎯 **Working Bug Hosts (CDN/Cloud):**\n" + "\n".join(valid_bug_hosts[:50])
+            report += "🔥 **Active Working Hosts:**\n\n" + "\n\n".join(valid_bug_hosts[:30])
         else:
-            report += "⚠️ ምንም የሚሰራ የባግ ሆስት (CDN/Cloud) በፋይሉ ውስጥ አልተገኘም።"
+            report += "⚠️ ምንም የሚሰራ ሆስት በፋይሉ ውስጥ አልተገኘም።"
 
         bot.delete_message(chat_id, processing_msg.message_id)
         
         if len(report) > 4000:
             file_io = io.BytesIO(report.encode('utf-8'))
-            file_io.name = "valid_bug_hosts.txt"
-            bot.send_document(chat_id, file_io, caption="✅ **ውጤቱ ስለረዘመ በሰነድ መልክ ተልኳል**", parse_mode="Markdown")
+            file_io.name = "scan_detailed_report.txt"
+            bot.send_document(chat_id, file_io, caption="✅ **የስካን ሪፖርቱ ስለረዘመ በሰነድ መልክ ተልኳል**", parse_mode="Markdown")
         else:
             bot.send_message(chat_id, report, parse_mode="Markdown")
 
     except Exception as e:
-        bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
+        bot.edit_message_text(f"❌ ፋይሉን በማንበብ ላይ ስህተት ተፈጥሯል: {e}", chat_id, processing_msg.message_id)
 
-# 9. 🌐 Subdomain Finder (ከ AlienVault, HackerTarget እና BufferOver በከፍተኛ ፍጥነት የሚሰበስብ)
+# 9. 🌐 Subdomain Finder (እንደ ዱሮው ከ 500 በላይ ንዑስ ዶሜይኖችን በጥልቀት የሚያመጣ)
 def process_super_subdomain(message):
     chat_id = message.chat.id
     if not message.text:
         return
     query = message.text.strip().replace("https://", "").replace("http://", "").split("/")[0]
-    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` Domain በመፈለግ ላይ... እባክዎ ይጠብቁ...", parse_mode="Markdown")
+    processing_msg = bot.send_message(chat_id, f"🔍 ለ `{query}` ከ 500 በላይ ንዑስ-ዶሜይኖች ከበርካታ ሰርቨሮች በጥልቀት በመሰብሰብ ላይ... እባክዎ ይጠብቁ...", parse_mode="Markdown")
     process_subdomain_direct(chat_id, query, processing_msg.message_id)
 
 def process_subdomain_direct(chat_id, query, msg_id):
     subdomains = set()
     
-    # 1. ከ AlienVault OTX API (ብዙ ንዑስ ዶሜይኖችን ያለ ገደብ የሚያመጣ)
+    # 1. ከ crt.sh በ HTML/Text መልክ (ብዙ ውጤቶችን ለማምጣት)
     try:
-        otx_url = f"https://otx.alienvault.com/api/v1/indicators/domain/{query}/passive_dns"
-        res = requests.get(otx_url, timeout=20)
-        if res.status_code == 200:
-            data = res.json()
-            for record in data.get('passive_dns', []):
-                hostname = record.get('hostname')
-                if hostname:
-                    sub = hostname.strip().lower()
-                    if sub and sub.endswith(query) and not sub.startswith('*'):
-                        subdomains.add(sub)
+        url = f"https://crt.sh/?q=%25.{query}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            import re
+            matches = re.findall(r'<TD>([a-zA-Z0-9.-]+\.' + re.escape(query) + r')</TD>', response.text)
+            for sub in matches:
+                sub = sub.strip().lower()
+                if sub and not sub.startswith('*'):
+                    subdomains.add(sub)
     except:
         pass
 
@@ -288,14 +283,13 @@ def process_subdomain_direct(chat_id, query, msg_id):
             except:
                 pass
             
-            # ውጤቶቹ በሙሉ በሰነድ ፋይል (.txt) ይላካሉ
             file_content = "\n".join(subdomain_list)
             file_io = io.BytesIO(file_content.encode('utf-8'))
-            file_io.name = f"{query}_subdomains.txt"
+            file_io.name = f"{query}_all_subdomains.txt"
             bot.send_document(
                 chat_id, 
                 file_io, 
-                caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nሁሉም ዶሜይኖች በሰነድ (.txt) ፋይል ተያይዘዋል!",
+                caption=f"✅ **የተገኙ ንዑስ ዶሜይኖች ({query}) [ጠቅላላ: {len(subdomain_list)}]:**\nሁሉም ውጤቶች በሰነድ (.txt) ፋይል ተያይዘዋል!",
                 parse_mode="Markdown"
             )
         else:
@@ -305,7 +299,6 @@ def process_subdomain_direct(chat_id, query, msg_id):
             bot.edit_message_text(f"❌ ስህተት ተፈጥሯል: {e}", chat_id, msg_id)
         except:
             pass
-
 
 # 10. 🔍 DNS Lookup Handler
 def process_dns_lookup(message):
@@ -405,50 +398,7 @@ def process_ip_recon(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ ስህተት ተፈጥሯል: {e}")
 
-# 13. 🖼️ Image Info & Editor
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    chat_id = message.chat.id
 
-    try:
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-
-        image = Image.open(io.BytesIO(downloaded_file))
-        width, height = image.size
-        format_type = image.format
-        file_size_kb = round(len(downloaded_file) / 1024, 2)
-
-        caption_text = message.caption
-        if caption_text:
-            draw = ImageDraw.Draw(image)
-            text_position = (20, height - 60)
-            draw.text(text_position, caption_text, fill=(255, 255, 255))
-            
-            output_io = io.BytesIO()
-            image.save(output_io, format='JPEG')
-            output_io.seek(0)
-
-            info_msg = (
-                f"🖼️ **Image Edit Success!**\n\n"
-                f"📐 **Resolution:** `{width}x{height}`\n"
-                f"📁 **Format:** `{format_type}`\n"
-                f"📦 **Size:** `{file_size_kb} KB`\n"
-                f"✍️ **Added Text:** `{caption_text}`"
-            )
-            bot.send_photo(chat_id, output_io, caption=info_msg, parse_mode="Markdown")
-        else:
-            info_msg = (
-                f"🖼️ **Image Info Analysis:**\n\n"
-                f"📐 **Resolution:** `{width}x{height}` px\n"
-                f"📁 **Format:** `{format_type}`\n"
-                f"📦 **Size:** `{file_size_kb} KB`\n\n"
-                f"💡 *ምስሉ ላይ ጽሁፍ ለመጻፍ ከፎቶው ጋር Caption/ጽሁፍ አያይዘው ይላኩ!*"
-            )
-            bot.send_message(chat_id, info_msg, parse_mode="Markdown")
-
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ የምስል ስህተት: {e}")
 
 # 14. Flask Server for Render
 app = Flask('')
