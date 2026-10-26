@@ -13,8 +13,9 @@ import telebot
 from telebot import types
 from flask import Flask, jsonify
 
-TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
-bot = telebot.TeleBot(TOKEN)
+# ⚠️ እዚህ ጋር የቦት ቶከንዎን ያስገቡ (በጥቅስ ምልክቱ ውስጥ)
+BOT_TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
+
 ADMIN_CONTACT = "https://t.me/None_Breaker"
 PORT = int(os.getenv("PORT", "10000"))
 TIMEOUT = 60
@@ -24,7 +25,10 @@ SECURITY_HEADERS = [
     "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"
 ]
 
+if not BOT_TOKEN or BOT_TOKEN == "YOUR_ACTUAL_BOT_TOKEN_HERE":
+    raise RuntimeError("እባክዎ ትክክለኛውን የቦት ቶከን በኮዱ ውስጥ ያስገቡ!")
 
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None)
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
