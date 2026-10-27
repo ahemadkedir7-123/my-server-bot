@@ -14,7 +14,7 @@ from telebot import types
 from flask import Flask, jsonify
 
 # ⚠️ እዚህ ጋር የቦት ቶከንዎን ያስገቡ (በጥቅስ ምልክቱ ውስጥ)
-BOT_TOKEN = "8788982436:AAFTXTcXdwxUkR36DmzV8hGSiOMm-Ok28AM"
+BOT_TOKEN = "8788982436:AAF8vO4_eEIkMC6Q715ehiZ7vwlrQEK5pEQ"
 
 ADMIN_CONTACT = "https://t.me/None_Breaker"
 PORT = int(os.getenv("PORT", "10000"))
