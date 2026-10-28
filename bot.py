@@ -16,7 +16,7 @@ from flask import Flask, jsonify
 # ⚠️ እዚህ ጋር የቦት ቶከንዎን ያስገቡ (በጥቅስ ምልክቱ ውስጥ)
 BOT_TOKEN = "8788982436:AAF8vO4_eEIkMC6Q715ehiZ7vwlrQEK5pEQ"
 
-ADMIN_CONTACT = "https://t.me/None_Breaker"
+ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
 PORT = int(os.getenv("PORT", "10000"))
 TIMEOUT = 60
 MAX_BULK_HOSTS = 1000
