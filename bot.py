@@ -6,7 +6,7 @@ import time
 import socket
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 import requests
 import telebot
@@ -16,14 +16,13 @@ from flask import Flask, jsonify
 # ==========================================
 # ⚙️ የቦት ማስተካከያ (CONFIGURATIONS)
 # ==========================================
-BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ የቦት ቶከን ያስገቡ
-ADMIN_CONTACT = "https://t.me/None_Breaker"
-ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_1](start_span)[span_1](end_span)
+BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
+ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
+ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
 
 # 💳 የቴሌብር መረጃ
 TELEBIRR_NAME = "ሸምሰዲን ሺፈ (Shemsadin Shifa)"
 TELEBIRR_PHONE = "0915922481"
-PRICE_ETB = "100"
 
 PORT = int(os.getenv("PORT", "10000"))
 TIMEOUT = 60
@@ -40,13 +39,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/10.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/12.0"})
 
 # 📊 ዴታቤዝ
 user_points = {}        
-premium_users = set()   
+premium_users = {}      # {chat_id: expiry_datetime} (ለወር ወይም ለዓመት ፕሪሚየም ጊዜ ማብቂያ)
 user_referrals = {}     
 referred_users = set()  
+waiting_for_proof = set() # ስክሪን ሾት እንዲልክ የሚጠበቁ ተጠቃሚዎች
 
 
 def clean_domain(value):
@@ -76,7 +76,7 @@ def menu():
     k.add(
         types.KeyboardButton("🌐 DNS Lookup"),
         types.KeyboardButton("🚀 Subdomain Finder"),
-        types.KeyboardButton("🛠️ Advanced Pentest Tools"), # 🚀 Web Recon ተወግዶ የተተካው አዲስ ኃይለኛ ሜኑ
+        types.KeyboardButton("🛠️ Advanced Pentest Tools"),
         types.KeyboardButton("🔍 Host Scanner (Bug Host)"),
         types.KeyboardButton("📦 Bulk Host Checker (Unlimited)"),
         types.KeyboardButton("💎 Get Unlimited / Premium"),
@@ -87,8 +87,18 @@ def menu():
     return k
 
 
-def check_and_deduct_point(chat_id):
+def is_premium(chat_id):
     if chat_id in premium_users:
+        expiry = premium_users[chat_id]
+        if expiry is None or expiry > datetime.now(timezone.utc):
+            return True
+        else:
+            del premium_users[chat_id] # ጊዜው አልፎ ከሆነ ከፕሪሚየም እናስወጣዋለን
+    return False
+
+
+def check_and_deduct_point(chat_id):
+    if is_premium(chat_id):
         return True
     
     current_pts = user_points.get(chat_id, 20)
@@ -101,12 +111,12 @@ def check_and_deduct_point(chat_id):
 
 def ask_domain(message, callback):
     chat_id = message.chat.id
-    if chat_id not in premium_users and user_points.get(chat_id, 20) <= 0:
+    if not is_premium(chat_id) and user_points.get(chat_id, 20) <= 0:
         bot.send_message(
             chat_id, 
             "❌ **የፖይንት ገደብዎ አልቋል!**\n\n"
             "ቦቱን በቀጣይነት ለመጠቀም:\n"
-            "1. 💎 **Get Unlimited / Premium** በመጫን በቴሌብር ይክፈሉ።\n"
+            "1. 💎 **Get Unlimited / Premium** በመጫን ፓኬጅ ይምረጡ።\n"
             "2. 👥 **Referral Program** በመጠቀም ጓደኞችን ይጋብዙ እና ነፃ ፖይንት ያግኙ!", parse_mode="Markdown")
         return
     
@@ -154,7 +164,7 @@ def start(message):
         "🚀 **NETX TOOLS PRO (ULTIMATE CYBER SUITE)**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎁 **የእርስዎ ቀሪ ፖይንት:** `{user_points.get(chat_id, 20)} Points`\n\n"
-        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።\n"
+        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።[span_1](start_span)[span_1](end_span)\n"
         "🛠️ **Advanced Pentest:** ሴኪዩሪቲ ሄደሮች እና ኤችቲቲፒ ሜተዶችን ይመረምራል።\n"
         "🔍 **Host Scanner:** ፖርቶችን እና Bug Host ሁኔታዎችን አብጠርጥሮ ያወጣል።\n"
         "💎 **Unlimited / Premium:** በቴሌብር በመክፈል ፕሪሚየም ይሁኑ።\n\n"
@@ -162,22 +172,43 @@ def start(message):
         reply_markup=menu(), parse_mode="Markdown")
 
 
+# ==========================================
+# 👑 ADMIN APPROVAL COMMANDS
+# ==========================================
 @bot.message_handler(commands=["approve"])
-def approve_user(message):
+def approve_month(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "❌ ይህንን ትዕዛዝ መጠቀም የሚችሉት አድሚኑ ብቻ ናቸው።")
         return
     parts = message.text.split()
     if len(parts) > 1 and parts[1].isdigit():
         uid = int(parts[1])
-        premium_users.add(uid)
-        bot.reply_to(message, f"✅ ተጠቃሚ `{uid}` አሁን **Premium / Unlimited** ሆኗል!", parse_mode="Markdown")
+        expiry = datetime.now(timezone.utc) + timedelta(days=30)
+        premium_users[uid] = expiry
+        bot.reply_to(message, f"✅ ተጠቃሚ `{uid}` አሁን ለ **1 ወር (Monthly Premium)** ፕሪሚየም ሆኗል!", parse_mode="Markdown")
         try:
-            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** ክፍያዎ በአድሚን ተረጋግጦ ቦቱ በአሁን ሰዓት **Unlimited / Premium** ሆኖ ተከፍቷል!", parse_mode="Markdown")
+            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ወር የክፍያ ማረጋገጫዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
         except Exception:
             pass
     else:
-        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve <user_id>`", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve <user_id>` (ለ 1 ወር)", parse_mode="Markdown")
+
+
+@bot.message_handler(commands=["approve_year"])
+def approve_year(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    parts = message.text.split()
+    if len(parts) > 1 and parts[1].isdigit():
+        uid = int(parts[1])
+        expiry = datetime.now(timezone.utc) + timedelta(days=365)
+        premium_users[uid] = expiry
+        bot.reply_to(message, f"✅ ተጠቃሚ `{uid}` አሁን ለ **1 ዓመት (Yearly Premium)** ፕሪሚየም ሆኗል!", parse_mode="Markdown")
+        try:
+            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ዓመት የክፍያ ማረጋገጫዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
+        except Exception:
+            pass
+    else:
+        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve_year <user_id>` (ለ 1 ዓመት)", parse_mode="Markdown")
 
 
 @bot.message_handler(commands=["revoke"])
@@ -188,14 +219,14 @@ def revoke_user(message):
     if len(parts) > 1 and parts[1].isdigit():
         uid = int(parts[1])
         if uid in premium_users:
-            premium_users.remove(uid)
+            del premium_users[uid]
         bot.reply_to(message, f"❌ ተጠቃሚ `{uid}` ከ ፕሪሚየም ተሰርዟል።", parse_mode="Markdown")
     else:
         bot.reply_to(message, "⚠️ አጠቃቀም: `/revoke <user_id>`", parse_mode="Markdown")
 
 
 # ==========================================
-# 🔎 DEEP SUBDOMAIN FINDER
+# 🔎 DEEP SUBDOMAIN FINDER[span_2](start_span)[span_2](end_span)
 # ==========================================
 def find_subdomains(domain):
     found, notes = set(), []
@@ -299,7 +330,7 @@ def subdomain_handler(message):
 
     d = validate(message)
     if not d: return
-    m = bot.send_message(chat_id, f"🚀 **Subdomain Finder:** `{d}` ከሁሉም ምንጮች በጥልቀት በመፈለግ ላይ... (እባክዎ ትንሽ ይጠብቁ)", parse_mode="Markdown")
+    m = bot.send_message(chat_id, f"🚀 **Subfinder Engine:** `{d}` ከሁሉም ምንጮች በጥልቀት በመፈለግ ላይ... (እባክዎ ትንሽ ይጠብቁ)", parse_mode="Markdown")
     found, notes = find_subdomains(d)
     
     try: bot.delete_message(chat_id, m.message_id)
@@ -329,7 +360,7 @@ def subdomain_handler(message):
 
 
 # ==========================================
-# 🛠️ ADVANCED PENTEST TOOLS (አዲስ የተጨመረ ጥልቅ ፍተሻ)
+# 🛠️ ADVANCED PENTEST TOOLS
 # ==========================================
 def advanced_pentest_report(domain):
     lines = title_block("ADVANCED PENTEST REPORT", domain) + ["━━━━━━━━━━━━━━━━━━━━━━━━━━"]
@@ -349,7 +380,6 @@ def advanced_pentest_report(domain):
             ""
         ]
         
-        # 1. Security Headers Check
         lines.append("🔒 **SECURITY HEADERS ANALYSIS:**")
         for h in SECURITY_HEADERS_LIST:
             if h in r.headers:
@@ -358,7 +388,6 @@ def advanced_pentest_report(domain):
                 lines.append(f"   • `{h}`: 🔴 `Missing (Vulnerable)`")
         lines.append("")
 
-        # 2. HTTP Methods Check
         lines.append("⚙️ **ALLOWED HTTP METHODS:**")
         methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
         allowed = []
@@ -536,13 +565,96 @@ def bulk_handler(message):
     send_txt(chat_id, "netx_bulk_host_report.txt", report, "📦 **Bulk Host Report (Unlimited)**")
 
 
-@bot.message_handler(content_types=["text", "document"], func=lambda m: True)
+# ==========================================
+# 💎 PREMIUM PRICING & SCREENSHOT PAYMENT FLOW
+# ==========================================
+@bot.callback_query_handler(func=lambda c: c.data in ["buy_month", "buy_year"])
+def premium_callback(call):
+    bot.answer_callback_query(call.id)
+    chat_id = call.message.chat.id
+    
+    if call.data == "buy_month":
+        plan_name = "1 ወር (Monthly)"
+        price = "100 ETB"
+    else:
+        plan_name = "1 ዓመት (Yearly)"
+        price = "400 ETB"
+        
+    waiting_for_proof.add(chat_id)
+    
+    bot.send_message(
+        chat_id,
+        f"💎 **የመረጡት ፓኬጅ:** `{plan_name}`\n"
+        f"💰 **የብር መጠን:** `{price}`\n\n"
+        f"💳 **የቴሌብር (Telebirr) አካውንት መረጃ:**\n"
+        f"• ቁጥር: `{TELEBIRR_PHONE}`\n"
+        f"• ስም: `{TELEBIRR_NAME}`\n\n"
+        "🚨 **ማስጠንቀቂያ:**\n"
+        "ማንኛውንም ዓይነት ሐሰተኛ ስክሪን ሾት መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል። እባክዎ ትክክለኛ ክፍያ ይፈጽሙ!\n\n"
+        "📸 **እንዴት ያረጋግጡ?**\n"
+        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) ወይም የትራንዛክሽን መረጃ በቀጥታ ወደዚህ ቻት ይላኩ!",
+        reply_markup=types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton("📤 ፎቶ / Screenshot ልክ (Send Proof)", callback_data="ready_to_send")
+        ),
+        parse_mode="Markdown"
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data == "ready_to_send")
+def ready_send_proof(call):
+    bot.answer_callback_query(call.id, "እባክዎ የስክሪን ሾት ፎቶውን በቀጥታ ወደዚህ ቻት ይላኩ።")
+
+
+@bot.message_handler(content_types=['photo', 'document'], func=lambda m: m.chat.id in waiting_for_proof or m.chat.id not in premium_users)
+def handle_payment_screenshot(message):
+    chat_id = message.chat.id
+    waiting_for_proof.discard(chat_id)
+    
+    try:
+        # ፎቶውን ለአድሚን በራሱ ሰር ማስተላለፍ
+        bot.forward_message(ADMIN_ID, chat_id, message.message_id)
+        bot.send_message(
+            ADMIN_ID,
+            f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
+            f"👤 **Sender ID:** `{chat_id}`\n"
+            f"👤 **Username:** @{message.from_user.username or 'None'}\n\n"
+            f"👇 **ለማጽደቅ የሚከተሉትን ትዕዛዞች ይጠቀሙ:**\n"
+            f"• 1 ወር ለመስጠት: `/approve {chat_id}`\n"
+            f"• 1 ዓመት ለመስጠት: `/approve_year {chat_id}`",
+            parse_mode="Markdown"
+        )
+        bot.reply_to(
+            message,
+            "✅ **የክፍያ ማረጋገጫዎ (Screenshot) ለአድሚን ተልኳል!**\n"
+            "አድሚኑ ክፍያዎን ሲያረጋግጥ የወር ወይም የአመት ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ ድጋሚ ይሞክሩ።", parse_mode="Markdown")
+
+
+@bot.message_handler(content_types=["text", "document", "photo"], func=lambda m: True)
 def route(message):
     text = (message.text or "").strip()
     chat_id = message.chat.id
     
     if message.document:
         bulk_handler(message)
+        return
+    
+    if message.content_type == 'photo':
+        try:
+            bot.forward_message(ADMIN_ID, chat_id, message.message_id)
+            bot.send_message(
+                ADMIN_ID, 
+                f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
+                f"👤 **Sender ID:** `{chat_id}`\n\n"
+                f"• 1 ወር: `/approve {chat_id}`\n"
+                f"• 1 ዓመት: `/approve_year {chat_id}`", parse_mode="Markdown"
+            )
+            bot.reply_to(message, "✅ **የስክሪን ሾት ማረጋገጫዎ ለአድሚን ተልኳል!** አድሚኑ ሲያረጋግጠው ፕሪሚየም ይሆናሉ።", parse_mode="Markdown")
+        except Exception:
+            pass
         return
 
     if text == "🌐 DNS Lookup": ask_domain(message, lambda m: bot.send_message(chat_id, dns_result(validate(m))[:4000], parse_mode="Markdown"))
@@ -556,8 +668,9 @@ def route(message):
         p = bot.send_message(chat_id, "📦 **ያለ ምንም ገደብ (Unlimited)** ብዙ ዶሜይኖችን የያዘ `.txt` ፋይል አያይዘው ይላኩ ወይም በአዲስ መስመር ጻፍው።", parse_mode="Markdown")
         bot.register_next_step_handler(p, bulk_handler)
     elif text == "👤 My Profile / Points":
-        status = "💎 Unlimited (Premium)" if chat_id in premium_users else "🆓 Standard (Free User)"
-        points = "Unlimited" if chat_id in premium_users else f"{user_points.get(chat_id, 20)} Points"
+        active_prem = is_premium(chat_id)
+        status = "💎 Unlimited (Premium Active)" if active_prem else "🆓 Standard (Free User)"
+        points = "Unlimited" if active_prem else f"{user_points.get(chat_id, 20)} Points"
         bot.send_message(
             chat_id,
             f"👤 **USER PROFILE**\n"
@@ -567,7 +680,8 @@ def route(message):
             f"🎁 **Points:** `{points}`\n\n"
             f"💡 *መሳሪያዎችን ሲጠቀሙ 1 ፖይንት ይቀነሳል።*", parse_mode="Markdown")
     elif text == "👥 Referral Program":
-        points = "Unlimited" if chat_id in premium_users else user_points.get(chat_id, 20)
+        active_prem = is_premium(chat_id)
+        points = "Unlimited" if active_prem else user_points.get(chat_id, 20)
         ref_link = f"https://t.me/{bot.get_me().username}?start=REF_{chat_id}"
         bot.send_message(
             chat_id,
@@ -575,23 +689,20 @@ def route(message):
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎁 **የእርስዎ ቀሪ ፖይንት:** `{points}`\n\n"
             f"🔗 **የእርስዎ ማስተዋወቂያ ሊንክ:**\n`{ref_link}`\n\n"
-            f"💡 *ይህንን ሊንክ ለጓደኛዎችዎ በመላክ እያንዳንዱ ሰው ሲገባ **20 ፖይንት** ያግኙ!*", parse_mode="Markdown")
+            f"💡 *ይህንን ሊንክ ለጓደኛዎችዎ በመላክ እያንዳንዱ ሰው ሲገባ **20 ፖይንት** ያግኙ! (ማጭበርበር የተከለከለ ነው)*", parse_mode="Markdown")
     elif text == "💎 Get Unlimited / Premium":
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("📅 1 ወር (Monthly) — 100 ETB", callback_data="buy_month"),
+            types.InlineKeyboardButton("📆 1 ዓመት (Yearly) — 400 ETB", callback_data="buy_year")
+        )
         bot.send_message(
             chat_id,
             "💎 **UNLIMITED / PREMIUM ACCESS**\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            "ቦቱን ያለገደብ (Unlimited) በቋሚነት መጠቀም ይፈልጋሉ?\n\n"
-            "💳 **በቴሌብር (Telebirr) ክፍያ:**\n"
-            f"• የብር መጠን: `{PRICE_ETB} ETB`\n"
-            f"• የቴሌብር አካውንት: `{TELEBIRR_PHONE}`\n"
-            f"• አካውንት ስም: `{TELEBIRR_NAME}`\n\n"
-            "📌 **እንዴት ይክፈሉ?**\n"
-            f"1. ከላይ ባለው ቁጥር `{PRICE_ETB} ብር` ያስተላልፉ።\n"
-            "2. የክፍያውን ማረጋገጫ (Transaction ID ወይም Screenshot) ለአድሚን ይላኩ።\n"
-            "3. አድሚኑ ክፍያዎን ሲያረጋግጥ ቦቱ በራስ ሰር ፕሪሚየም ይሆንልዎታል።\n\n"
-            f"👤 **የእርስዎ User ID (ለአድሚን ሲልኩ የሚጠቅም):** `{chat_id}`\n\n"
-            "👨‍💻 **ክፍያ ልኮ ለማረጋገጥ:** [እዚህ ይጫኑ](https://t.me/None_Breaker)", parse_mode="Markdown", disable_web_page_preview=True)
+            "ቦቱን ያለገደብ (Unlimited) በቋሚነት መጠቀም ይፈልጋሉ?\n"
+            "እባክዎ ከታች ከሚገኙት የፕሪሚየም ፓኬጆች ውስጥ የሚፈልጉትን ይምረጡ፦",
+            reply_markup=markup, parse_mode="Markdown")
     elif text == "👨‍💻 Admin Contact":
         k = types.InlineKeyboardMarkup()
         k.add(types.InlineKeyboardButton("👨‍💻 Contact Admin", url=ADMIN_CONTACT))
@@ -626,5 +737,6 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with Advanced Pentest Suite starting")
+    log.info("NetX Tools Pro with Monthly/Yearly Subscription & Anti-Cheat starting")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
+
