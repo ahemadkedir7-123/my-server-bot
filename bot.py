@@ -2,6 +2,7 @@ import os
 import re
 import io
 import time
+import ssl
 import socket
 import logging
 import threading
@@ -11,33 +12,35 @@ from urllib.parse import urlparse
 import requests
 import telebot
 from telebot import types
+from telebot.handler_backends import ContinueHandling
 from flask import Flask, jsonify
 
-# ==========================================
-# CONFIGURATIONS
-# ==========================================
+# ==================================================
+# CONFIGURATION
+# ==================================================
 
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
-ADMIN_CONTACT = "https://t.me/None_Breaker"
 ADMIN_ID = 6668128978
+ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
+
+CHANNELS = [
+    "@freeinternat10",
+    "@Nur_Tunnel_free_ethiopian"
+]
+
+CHANNEL_LINKS = [
+    "https://t.me/freeinternat10",
+    "https://t.me/Nur_Tunnel_free_ethiopian"
+]
 
 TELEBIRR_NAME = "ሸምሰዲን ሺፈ (Shemsadin Shifa)"
 TELEBIRR_PHONE = "0915922481"
 
 PORT = int(os.getenv("PORT", "10000"))
-TIMEOUT = 60
-
-SECURITY_HEADERS_LIST = [
-    "Strict-Transport-Security",
-    "Content-Security-Policy",
-    "X-Content-Type-Options",
-    "Referrer-Policy",
-    "Permissions-Policy",
-    "X-Frame-Options"
-]
+TIMEOUT = 12
 
 if not BOT_TOKEN or BOT_TOKEN == "PASTE_YOUR_BOT_TOKEN_HERE":
-    raise RuntimeError("Please configure BOT_TOKEN.")
+    raise RuntimeError("Set your BOT_TOKEN environment variable.")
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode=None)
 app = Flask(__name__)
@@ -47,57 +50,54 @@ log = logging.getLogger("NetXToolsPro")
 
 session = requests.Session()
 session.headers.update({
-    "User-Agent": "Mozilla/5.0 NetXToolsPro/19.0"
+    "User-Agent": "NetXToolsPro/20.0"
 })
 
-# ==========================================
-# DATABASE / USER STATES
-# ==========================================
+# ==================================================
+# USER DATA
+# ==================================================
 
 user_points = {}
 premium_users = {}
 user_referrals = {}
 referred_users = set()
-
-# Stores selected payment plan for each user
 waiting_for_tx = {}
 
-
-# ==========================================
-# HELPERS
-# ==========================================
+# ==================================================
+# GENERAL HELPERS
+# ==================================================
 
 def clean_domain(value):
-    val = (value or "").strip().lower()
+    value = (value or "").strip().lower()
 
-    if "://" in val:
-        val = urlparse(val).hostname or val.split("://")[1]
+    if "://" in value:
+        value = urlparse(value).hostname or value
 
-    val = val.split("/")[0].split(":")[0].rstrip(".")
+    value = value.split("/")[0].split(":")[0].rstrip(".")
 
-    pat = (
+    pattern = (
         r"(?=.{1,253}$)"
         r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
         r"[a-z]{2,63}"
     )
 
-    return val if re.fullmatch(pat, val) else None
+    return value if re.fullmatch(pattern, value) else None
 
 
 def title_block(title, target=""):
     lines = [
         "╔══════════════════════════════════╗",
-        "║          🛡️ NETX TOOLS PRO       ║",
+        "║          NETX TOOLS PRO          ║",
         f"║       {title.center(26)}       ║",
         "╚══════════════════════════════════╝"
     ]
 
     if target:
-        lines.append(f"🎯 Target: {target}")
+        lines.append(f"Target: {target}")
 
     lines.append(
-        f"🕒 Time UTC: "
-        f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
+        "Time UTC: " +
+        datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     )
 
     lines.append("")
@@ -105,82 +105,57 @@ def title_block(title, target=""):
 
 
 def menu():
-    k = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    k = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        row_width=2
+    )
 
     k.add(
         types.KeyboardButton("🌐 DNS Lookup"),
         types.KeyboardButton("🚀 Subdomain Finder"),
         types.KeyboardButton("🛠️ Advanced Pentest Tools"),
         types.KeyboardButton("🔍 Host Scanner (Bug Host)"),
-        types.KeyboardButton("📦 Bulk Host Checker (Unlimited)"),
+        types.KeyboardButton("📦 Bulk Host Checker"),
         types.KeyboardButton("💎 Get Unlimited / Premium"),
         types.KeyboardButton("👥 Referral Program"),
         types.KeyboardButton("👤 My Profile / Points"),
-        types.KeyboardButton("👨‍💻 Admin Contact"),
+        types.KeyboardButton("👨‍💻 Admin Contact")
     )
 
     return k
 
 
-def is_premium(chat_id):
-    if chat_id in premium_users:
-        expiry = premium_users[chat_id]
+def is_premium(uid):
+    if uid not in premium_users:
+        return False
 
-        if expiry is None or expiry > datetime.now(timezone.utc):
-            return True
+    expiry = premium_users[uid]
 
-        del premium_users[chat_id]
+    if expiry is None:
+        return True
 
+    if expiry > datetime.now(timezone.utc):
+        return True
+
+    premium_users.pop(uid, None)
     return False
 
 
-def check_and_deduct_point(chat_id):
-    if is_premium(chat_id):
+def check_and_deduct_point(uid):
+    if is_premium(uid):
         return True
 
-    current_pts = user_points.get(chat_id, 20)
+    points = user_points.get(uid, 20)
 
-    if current_pts <= 0:
+    if points <= 0:
         return False
 
-    user_points[chat_id] = current_pts - 1
+    user_points[uid] = points - 1
     return True
 
 
-def ask_domain(message, callback):
-    chat_id = message.chat.id
-
-    if not is_premium(chat_id) and user_points.get(chat_id, 20) <= 0:
-        bot.send_message(
-            chat_id,
-            "❌ የፖይንት ገደብዎ አልቋል!\n\n"
-            "💎 Premium ይግዙ ወይም Referral Program ይጠቀሙ።"
-        )
-        return
-
-    m = bot.send_message(
-        chat_id,
-        "🌐 የሚፈልጉትን ዶሜይን ያስገቡ።\n"
-        "ምሳሌ: google.com"
-    )
-
-    bot.register_next_step_handler(m, callback)
-
-
-def validate(message):
-    d = clean_domain(message.text)
-
-    if not d:
-        bot.reply_to(
-            message,
-            "❌ ትክክለኛ ዶሜይን አልገባም።"
-        )
-
-    return d
-
-
-def send_txt(chat_id, filename, text, caption):
-    data = io.BytesIO(text.encode("utf-8"))
+def send_txt(chat_id, filename, content, caption):
+    data = io.BytesIO(content.encode("utf-8"))
     data.name = filename
 
     bot.send_document(
@@ -190,39 +165,137 @@ def send_txt(chat_id, filename, text, caption):
     )
 
 
-# ==========================================
-# START COMMAND
-# ==========================================
+# ==================================================
+# CHANNEL SUBSCRIPTION CHECK
+# ==================================================
+
+def check_membership(user_id):
+    missing = []
+
+    for channel in CHANNELS:
+        try:
+            member = bot.get_chat_member(channel, user_id)
+
+            if member.status in ("creator", "administrator", "member"):
+                continue
+
+            if member.status == "restricted" and getattr(
+                member, "is_member", False
+            ):
+                continue
+
+            missing.append(channel)
+
+        except Exception:
+            log.exception("Channel membership check failed: %s", channel)
+            missing.append(channel)
+
+    return missing
+
+
+def send_join_message(chat_id, missing=None):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+
+    for link in CHANNEL_LINKS:
+        markup.add(
+            types.InlineKeyboardButton(
+                "📢 Join Channel",
+                url=link
+            )
+        )
+
+    markup.add(
+        types.InlineKeyboardButton(
+            "✅ I Joined - Check Again",
+            callback_data="check_membership"
+        )
+    )
+
+    bot.send_message(
+        chat_id,
+        "🔒 NETX TOOLS PRO - CHANNEL VERIFICATION\n\n"
+        "ቦቱን ለመጠቀም ሁለቱንም Channels መቀላቀል አለብዎት።\n"
+        "ከተቀላቀሉ በኋላ I Joined የሚለውን ይጫኑ።",
+        reply_markup=markup
+    )
+
+
+def membership_required(message):
+    uid = message.from_user.id
+
+    # Admin bypass
+    if uid == ADMIN_ID:
+        return True
+
+    missing = check_membership(uid)
+
+    if missing:
+        send_join_message(message.chat.id, missing)
+        return False
+
+    return True
+
+
+@bot.callback_query_handler(
+    func=lambda c: c.data == "check_membership"
+)
+def check_membership_callback(call):
+    uid = call.from_user.id
+
+    if uid == ADMIN_ID or not check_membership(uid):
+        bot.answer_callback_query(
+            call.id,
+            "✅ Membership verified!",
+            show_alert=True
+        )
+
+        bot.send_message(
+            call.message.chat.id,
+            "✅ ሁለቱም Channels ተረጋግጠዋል።",
+            reply_markup=menu()
+        )
+    else:
+        bot.answer_callback_query(
+            call.id,
+            "❌ ሁለቱንም Channels አልተቀላቀሉም።",
+            show_alert=True
+        )
+
+
+# ==================================================
+# START
+# ==================================================
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    chat_id = message.chat.id
+    if not membership_required(message):
+        return
 
-    if chat_id not in user_points:
-        user_points[chat_id] = 20
+    uid = message.from_user.id
+
+    user_points.setdefault(uid, 20)
 
     args = message.text.split()
 
     if len(args) > 1 and args[1].startswith("REF_"):
         try:
-            referrer_id = int(args[1].split("_")[1])
+            referrer = int(args[1].split("_")[1])
 
-            if referrer_id != chat_id and chat_id not in referred_users:
-                referred_users.add(chat_id)
+            if referrer != uid and uid not in referred_users:
+                referred_users.add(uid)
 
-                user_points[referrer_id] = (
-                    user_points.get(referrer_id, 20) + 20
+                user_points[referrer] = (
+                    user_points.get(referrer, 20) + 20
                 )
 
                 user_referrals.setdefault(
-                    referrer_id, set()
-                ).add(chat_id)
+                    referrer, set()
+                ).add(uid)
 
                 try:
                     bot.send_message(
-                        referrer_id,
-                        "🎉 አዲስ ሰው በReferral Linkዎ ገብቷል። "
-                        "+20 Points አግኝተዋል!"
+                        referrer,
+                        "🎉 አዲስ Referral ገብቷል። +20 Points!"
                     )
                 except Exception:
                     pass
@@ -231,23 +304,23 @@ def start(message):
             pass
 
     bot.send_message(
-        chat_id,
+        uid,
         "🚀 NETX TOOLS PRO\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎁 ቀሪ Points: {user_points.get(chat_id, 20)}\n\n"
+        f"🎁 Points: {user_points[uid]}\n\n"
         "🌐 DNS Lookup\n"
         "🚀 Subdomain Finder\n"
-        "🛠️ Security Analysis\n"
-        "🔍 Host Scanner\n"
+        "🛠️ Advanced Security Report\n"
+        "🔍 Detailed Host Checker\n"
         "💎 Premium Access\n\n"
-        "ፈቃድ ባለዎት ሲስተሞች ላይ ብቻ ይጠቀሙ።",
+        "በፈቃድ ባለዎት ድረ-ገጾች ላይ ብቻ ይጠቀሙ።",
         reply_markup=menu()
     )
 
 
-# ==========================================
-# ADMIN APPROVAL
-# ==========================================
+# ==================================================
+# ADMIN COMMANDS
+# ==================================================
 
 @bot.message_handler(commands=["approve"])
 def approve_month(message):
@@ -256,28 +329,22 @@ def approve_month(message):
 
     parts = message.text.split()
 
-    if len(parts) > 1 and parts[1].isdigit():
-        uid = int(parts[1])
-
-        expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        premium_users[uid] = expiry
-
-        bot.reply_to(
-            message,
-            f"✅ User {uid} approved for 30 days."
-        )
-
-        try:
-            bot.send_message(
-                uid,
-                "🎉 ክፍያዎ ተረጋግጧል። "
-                "የ1 ወር Premium ተከፍቷል!"
-            )
-        except Exception:
-            pass
-
-    else:
+    if len(parts) != 2 or not parts[1].isdigit():
         bot.reply_to(message, "Usage: /approve USER_ID")
+        return
+
+    uid = int(parts[1])
+
+    premium_users[uid] = (
+        datetime.now(timezone.utc) + timedelta(days=30)
+    )
+
+    bot.reply_to(message, f"✅ User {uid} approved for 30 days.")
+
+    try:
+        bot.send_message(uid, "🎉 Monthly Premium ተከፍቷል!")
+    except Exception:
+        pass
 
 
 @bot.message_handler(commands=["approve_year"])
@@ -287,28 +354,22 @@ def approve_year(message):
 
     parts = message.text.split()
 
-    if len(parts) > 1 and parts[1].isdigit():
-        uid = int(parts[1])
-
-        expiry = datetime.now(timezone.utc) + timedelta(days=365)
-        premium_users[uid] = expiry
-
-        bot.reply_to(
-            message,
-            f"✅ User {uid} approved for 365 days."
-        )
-
-        try:
-            bot.send_message(
-                uid,
-                "🎉 ክፍያዎ ተረጋግጧል። "
-                "የ1 ዓመት Premium ተከፍቷል!"
-            )
-        except Exception:
-            pass
-
-    else:
+    if len(parts) != 2 or not parts[1].isdigit():
         bot.reply_to(message, "Usage: /approve_year USER_ID")
+        return
+
+    uid = int(parts[1])
+
+    premium_users[uid] = (
+        datetime.now(timezone.utc) + timedelta(days=365)
+    )
+
+    bot.reply_to(message, f"✅ User {uid} approved for 365 days.")
+
+    try:
+        bot.send_message(uid, "🎉 Yearly Premium ተከፍቷል!")
+    except Exception:
+        pass
 
 
 @bot.message_handler(commands=["revoke"])
@@ -318,32 +379,112 @@ def revoke_user(message):
 
     parts = message.text.split()
 
-    if len(parts) > 1 and parts[1].isdigit():
+    if len(parts) == 2 and parts[1].isdigit():
         uid = int(parts[1])
         premium_users.pop(uid, None)
 
-        bot.reply_to(
-            message,
-            f"❌ User {uid} Premium revoked."
-        )
-
+        bot.reply_to(message, f"❌ Premium revoked for {uid}.")
     else:
         bot.reply_to(message, "Usage: /revoke USER_ID")
 
 
-# ==========================================
+# ==================================================
+# DOMAIN INPUT
+# ==================================================
+
+def ask_domain(message, callback):
+    uid = message.from_user.id
+
+    if not membership_required(message):
+        return
+
+    if not is_premium(uid) and user_points.get(uid, 20) <= 0:
+        bot.send_message(
+            message.chat.id,
+            "❌ Points አልቋል። Premium ይግዙ ወይም Referral ይጠቀሙ።"
+        )
+        return
+
+    prompt = bot.send_message(
+        message.chat.id,
+        "🌐 Domain ያስገቡ። ምሳሌ: example.com"
+    )
+
+    bot.register_next_step_handler(prompt, callback)
+
+
+def validate(message):
+    domain = clean_domain(message.text)
+
+    if not domain:
+        bot.reply_to(
+            message,
+            "❌ ትክክለኛ Domain ያስገቡ።"
+        )
+
+    return domain
+
+
+# ==================================================
+# DNS LOOKUP
+# ==================================================
+
+def dns_result(domain):
+    lines = title_block("DNS LOOKUP", domain)
+
+    try:
+        ips = sorted({
+            item[4][0]
+            for item in socket.getaddrinfo(
+                domain,
+                None,
+                type=socket.SOCK_STREAM
+            )
+        })
+
+        lines.append(f"Total IPs: {len(ips)}")
+
+        for ip in ips[:30]:
+            lines.append(f"• {ip}")
+
+    except Exception as e:
+        lines.append(f"DNS Error: {type(e).__name__}")
+
+    return "\n".join(lines)
+
+
+def dns_handler(message):
+    if not membership_required(message):
+        return
+
+    domain = validate(message)
+
+    if not domain:
+        return
+
+    if not check_and_deduct_point(message.from_user.id):
+        bot.reply_to(message, "❌ Points አልቋል።")
+        return
+
+    bot.send_message(
+        message.chat.id,
+        dns_result(domain)
+    )
+
+
+# ==================================================
 # SUBDOMAIN FINDER
-# ==========================================
+# ==================================================
 
 def domain_ok_sub(sub, domain):
-    pat = (
+    pattern = (
         r"(?=.{1,253}$)"
         r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
         r"[a-z]{2,63}"
     )
 
     return (
-        bool(re.fullmatch(pat, sub))
+        bool(re.fullmatch(pattern, sub))
         and (sub == domain or sub.endswith("." + domain))
     )
 
@@ -372,19 +513,19 @@ def find_subdomains(domain):
 
     for name, url, params in sources:
         try:
-            r = session.get(
+            response = session.get(
                 url,
                 params=params,
-                timeout=20
+                timeout=TIMEOUT
             )
 
-            if r.status_code != 200:
-                notes.append(f"⚠️ {name}: HTTP {r.status_code}")
+            if response.status_code != 200:
+                notes.append(f"{name}: HTTP {response.status_code}")
                 continue
 
             if name == "crt.sh":
-                for rec in r.json():
-                    for raw in rec.get("name_value", "").splitlines():
+                for record in response.json():
+                    for raw in record.get("name_value", "").splitlines():
                         sub = raw.strip().lower().rstrip(".")
 
                         if sub.startswith("*."):
@@ -394,222 +535,495 @@ def find_subdomains(domain):
                             found.add(sub)
 
             elif name == "AlienVault":
-                for record in r.json().get("passive_dns", []):
-                    sub = record.get("hostname", "").strip().lower().rstrip(".")
+                for record in response.json().get("passive_dns", []):
+                    sub = (
+                        record.get("hostname", "")
+                        .strip().lower().rstrip(".")
+                    )
 
                     if domain_ok_sub(sub, domain):
                         found.add(sub)
 
             elif name == "HackerTarget":
-                for line in r.text.splitlines():
-                    parts = line.split(",")
+                for line in response.text.splitlines():
+                    sub = line.split(",")[0].strip().lower().rstrip(".")
 
-                    if parts:
-                        sub = parts[0].strip().lower().rstrip(".")
+                    if domain_ok_sub(sub, domain):
+                        found.add(sub)
 
-                        if domain_ok_sub(sub, domain):
-                            found.add(sub)
-
-            notes.append(f"✅ {name}: Active")
+            notes.append(f"{name}: OK")
 
         except Exception as e:
-            notes.append(f"⚠️ {name}: {type(e).__name__}")
+            notes.append(f"{name}: {type(e).__name__}")
 
     return sorted(found), notes
 
 
 def subdomain_handler(message):
-    chat_id = message.chat.id
-
-    if not check_and_deduct_point(chat_id):
-        bot.send_message(chat_id, "❌ Points አልቋል።")
+    if not membership_required(message):
         return
 
-    d = validate(message)
+    domain = validate(message)
 
-    if not d:
+    if not domain:
         return
 
-    m = bot.send_message(
-        chat_id,
-        f"🚀 {d} እየተመረመረ ነው..."
+    if not check_and_deduct_point(message.from_user.id):
+        bot.reply_to(message, "❌ Points አልቋል።")
+        return
+
+    status = bot.send_message(
+        message.chat.id,
+        f"🔎 {domain} እየተመረመረ ነው..."
     )
 
-    found, notes = find_subdomains(d)
+    found, notes = find_subdomains(domain)
 
     try:
-        bot.delete_message(chat_id, m.message_id)
+        bot.delete_message(
+            message.chat.id,
+            status.message_id
+        )
     except Exception:
         pass
 
     if not found:
-        bot.send_message(chat_id, f"⚠️ {d} ላይ ውጤት አልተገኘም።")
-        return
-
-    content = "\n".join(found)
-
-    if len(found) <= 10:
         bot.send_message(
-            chat_id,
-            f"📊 Total Found: {len(found)}\n\n{content}"
+            message.chat.id,
+            "⚠️ Subdomain አልተገኘም።"
         )
-    else:
-        send_txt(
-            chat_id,
-            f"subdomains_{d}.txt",
-            content,
-            f"Subdomain Report: {d}"
-        )
-
-
-# ==========================================
-# ADVANCED SECURITY REPORT
-# ==========================================
-
-def advanced_pentest_report(domain):
-    lines = title_block("SECURITY REPORT", domain)
-
-    url = f"https://{domain}/"
-
-    try:
-        t = time.perf_counter()
-
-        r = session.get(
-            url,
-            timeout=TIMEOUT,
-            allow_redirects=True
-        )
-
-        ms = round((time.perf_counter() - t) * 1000)
-
-        lines += [
-            f"Target Status: {r.status_code}",
-            f"Response Time: {ms} ms",
-            f"Final URL: {r.url[:150]}",
-            f"Server: {r.headers.get('Server', 'Not Disclosed')}",
-            "",
-            "SECURITY HEADERS:"
-        ]
-
-        for h in SECURITY_HEADERS_LIST:
-            status = "Present" if h in r.headers else "Missing"
-            lines.append(f"{h}: {status}")
-
-    except Exception as e:
-        lines.append(f"Connection failed: {type(e).__name__}")
-
-    return "\n".join(lines)
-
-
-def pentest_handler(message):
-    chat_id = message.chat.id
-
-    if not check_and_deduct_point(chat_id):
-        bot.send_message(chat_id, "❌ Points አልቋል።")
         return
 
-    d = validate(message)
+    report = title_block("SUBDOMAIN REPORT", domain)
+    report.append(f"Total Found: {len(found)}")
+    report.append("")
 
-    if not d:
-        return
-
-    report = advanced_pentest_report(d)
+    report.extend(found)
+    report.append("")
+    report.append("SOURCE STATUS")
+    report.extend(notes)
 
     send_txt(
-        chat_id,
-        f"security_report_{d}.txt",
-        report,
-        f"Security Report: {d}"
+        message.chat.id,
+        f"subdomains_{domain}.txt",
+        "\n".join(report),
+        f"Subdomain Report: {domain}"
     )
 
 
-# ==========================================
-# HOST SCANNER
-# ==========================================
+# ==================================================
+# TLS INFORMATION
+# ==================================================
 
-def host_scanner_report(domain):
-    lines = title_block("HOST SCANNER", domain)
+def tls_information(domain, port=443):
+    result = []
 
     try:
+        context = ssl.create_default_context()
+
+        with socket.create_connection(
+            (domain, port),
+            timeout=TIMEOUT
+        ) as sock:
+
+            with context.wrap_socket(
+                sock,
+                server_hostname=domain
+            ) as tls:
+
+                result.append(f"TLS Version: {tls.version()}")
+                result.append(
+                    f"Cipher: {tls.cipher()[0] if tls.cipher() else 'Unknown'}"
+                )
+
+                cert = tls.getpeercert()
+
+                if cert:
+                    result.append("Certificate: Present")
+
+                    subject = dict(
+                        x[0] for x in cert.get("subject", [])
+                    )
+
+                    issuer = dict(
+                        x[0] for x in cert.get("issuer", [])
+                    )
+
+                    result.append(
+                        f"Certificate Subject: {subject.get('commonName', 'Unknown')}"
+                    )
+
+                    result.append(
+                        f"Certificate Issuer: {issuer.get('commonName', 'Unknown')}"
+                    )
+
+                    result.append(
+                        f"Valid Until: {cert.get('notAfter', 'Unknown')}"
+                    )
+
+    except Exception as e:
+        result.append(f"TLS Error: {type(e).__name__}")
+
+    return result
+
+
+# ==================================================
+# DETAILED HOST CHECKER
+# ==================================================
+
+def host_scanner_report(domain):
+    lines = title_block("WEB HOST SCANNER", domain)
+    lines.append("=" * 35)
+
+    # DNS
+    try:
         ips = sorted({
-            x[4][0]
-            for x in socket.getaddrinfo(
+            item[4][0]
+            for item in socket.getaddrinfo(
                 domain,
                 None,
                 type=socket.SOCK_STREAM
             )
         })
 
-        lines.append(f"IPs: {', '.join(ips[:3])}")
-
-    except Exception:
-        lines.append("DNS Resolution Failed")
-
-    try:
-        r = session.get(
-            f"https://{domain}/",
-            timeout=TIMEOUT
-        )
-
-        lines.append(f"HTTP Status: {r.status_code}")
-        lines.append(f"Server: {r.headers.get('Server', 'Unknown')}")
+        lines.append("IP ADDRESSES:")
+        for ip in ips:
+            lines.append(f"  • {ip}")
 
     except Exception as e:
-        lines.append(f"HTTPS failed: {type(e).__name__}")
+        lines.append(f"DNS ERROR: {type(e).__name__}")
+
+    lines.append("")
+    lines.append("PORT CHECK RESULTS")
+    lines.append("Ports: 80, 443, 8080, 8443")
+    lines.append("")
+
+    ports = [
+        (80, "http"),
+        (443, "https"),
+        (8080, "http"),
+        (8443, "https")
+    ]
+
+    for port, scheme in ports:
+        lines.append("-" * 35)
+        lines.append(f"{scheme.upper()} PORT: {port}")
+
+        # Connection check
+        try:
+            with socket.create_connection(
+                (domain, port),
+                timeout=5
+            ):
+                lines.append("Port Status: OPEN")
+
+        except OSError:
+            lines.append("Port Status: CLOSED / TIMEOUT")
+            continue
+
+        url = f"{scheme}://{domain}:{port}/"
+
+        try:
+            response = session.get(
+                url,
+                timeout=TIMEOUT,
+                allow_redirects=False,
+                stream=True
+            )
+
+            lines.append(
+                f"HTTP Status: {response.status_code} "
+                f"{response.reason}"
+            )
+
+            lines.append(
+                f"Server: {response.headers.get('Server', 'Not Disclosed')}"
+            )
+
+            lines.append(
+                f"Connection: {response.headers.get('Connection', 'Not Disclosed')}"
+            )
+
+            location = response.headers.get("Location")
+
+            if location:
+                lines.append(f"Redirect: {location[:250]}")
+            else:
+                lines.append("Redirect: None")
+
+            response.close()
+
+        except requests.RequestException as e:
+            lines.append(f"HTTP Error: {type(e).__name__}")
+            continue
+
+        # GET
+        try:
+            r = session.get(
+                url,
+                timeout=TIMEOUT,
+                allow_redirects=False,
+                stream=True
+            )
+
+            lines.append(f"GET: {r.status_code}")
+            r.close()
+
+        except requests.RequestException:
+            lines.append("GET: Failed")
+
+        # HEAD
+        try:
+            r = session.head(
+                url,
+                timeout=TIMEOUT,
+                allow_redirects=False
+            )
+
+            lines.append(f"HEAD: {r.status_code}")
+
+        except requests.RequestException:
+            lines.append("HEAD: Failed")
+
+        # OPTIONS
+        try:
+            r = session.options(
+                url,
+                timeout=TIMEOUT,
+                allow_redirects=False
+            )
+
+            lines.append(f"OPTIONS: {r.status_code}")
+
+            allow = r.headers.get("Allow", "Not disclosed")
+            lines.append(f"Allow Header: {allow}")
+
+        except requests.RequestException:
+            lines.append("OPTIONS: Failed")
+
+        # TLS
+        if scheme == "https":
+            lines.append("TLS INFORMATION:")
+
+            lines.extend(
+                tls_information(domain, port)
+            )
+
+        lines.append("")
+
+    lines.append("=" * 35)
+    lines.append("End of Host Scanner Report")
 
     return "\n".join(lines)
 
 
 def host_scanner_handler(message):
-    chat_id = message.chat.id
-
-    if not check_and_deduct_point(chat_id):
-        bot.send_message(chat_id, "❌ Points አልቋል።")
+    if not membership_required(message):
         return
 
-    d = validate(message)
+    domain = validate(message)
 
-    if not d:
+    if not domain:
         return
 
-    report = host_scanner_report(d)
+    if not check_and_deduct_point(message.from_user.id):
+        bot.reply_to(message, "❌ Points አልቋል።")
+        return
 
-    send_txt(
-        chat_id,
-        f"host_report_{d}.txt",
-        report,
-        f"Host Report: {d}"
+    status = bot.send_message(
+        message.chat.id,
+        f"🔍 Host Checker: {domain}\n"
+        "የHTTP እና TLS መረጃ እየተሰበሰበ ነው..."
     )
 
-
-# ==========================================
-# BULK HOST CHECKER
-# ==========================================
-
-def check_bulk_host(domain):
     try:
-        r = session.get(
-            f"https://{domain}/",
-            timeout=TIMEOUT
+        report = host_scanner_report(domain)
+
+        try:
+            bot.delete_message(
+                message.chat.id,
+                status.message_id
+            )
+        except Exception:
+            pass
+
+        send_txt(
+            message.chat.id,
+            f"host_scanner_{domain}.txt",
+            report,
+            f"🛡️ Detailed Host Scanner Report: {domain}"
         )
 
-        return [
-            f"🎯 {domain}",
-            f"Status: {r.status_code}",
-            f"Server: {r.headers.get('Server', 'Unknown')}"
-        ]
+    except Exception:
+        log.exception("Host scanner failed")
+        bot.send_message(
+            message.chat.id,
+            "❌ Host Scanner ስህተት አጋጥሞታል።"
+        )
+
+
+# ==================================================
+# ADVANCED PENTEST / SECURITY REPORT
+# ==================================================
+
+def advanced_pentest_report(domain):
+    lines = title_block("ADVANCED SECURITY REPORT", domain)
+
+    url = f"https://{domain}/"
+
+    try:
+        started = time.perf_counter()
+
+        response = session.get(
+            url,
+            timeout=TIMEOUT,
+            allow_redirects=True,
+            stream=True
+        )
+
+        elapsed = round(
+            (time.perf_counter() - started) * 1000
+        )
+
+        lines.extend([
+            "GENERAL INFORMATION",
+            f"HTTP Status: {response.status_code}",
+            f"Response Time: {elapsed} ms",
+            f"Final URL: {response.url[:250]}",
+            f"Server: {response.headers.get('Server', 'Not Disclosed')}",
+            f"Powered By: {response.headers.get('X-Powered-By', 'Not Disclosed')}",
+            ""
+        ])
+
+        lines.append("SECURITY HEADERS")
+
+        security_headers = {
+            "Strict-Transport-Security":
+                "HSTS",
+            "Content-Security-Policy":
+                "CSP",
+            "X-Content-Type-Options":
+                "Content Type Protection",
+            "Referrer-Policy":
+                "Referrer Policy",
+            "Permissions-Policy":
+                "Permissions Policy",
+            "X-Frame-Options":
+                "Clickjacking Protection"
+        }
+
+        for header, description in security_headers.items():
+            value = response.headers.get(header)
+
+            if value:
+                lines.append(
+                    f"[PRESENT] {header}: {value[:180]}"
+                )
+            else:
+                lines.append(
+                    f"[MISSING] {header}: {description}"
+                )
+
+        lines.append("")
+
+        lines.append("HTTP RESPONSE HEADERS")
+
+        for key, value in response.headers.items():
+            lines.append(f"{key}: {value[:200]}")
+
+        response.close()
+
+    except Exception as e:
+        lines.append(
+            f"HTTPS Request Error: {type(e).__name__}"
+        )
+
+    lines.append("")
+    lines.append("TLS DETAILS")
+    lines.extend(tls_information(domain, 443))
+
+    lines.append("")
+    lines.append("HTTP OPTIONS INFORMATION")
+
+    try:
+        r = session.options(
+            url,
+            timeout=TIMEOUT,
+            allow_redirects=False
+        )
+
+        lines.append(f"OPTIONS Status: {r.status_code}")
+        lines.append(
+            f"Allow Header: {r.headers.get('Allow', 'Not Disclosed')}"
+        )
+
+    except Exception as e:
+        lines.append(f"OPTIONS Error: {type(e).__name__}")
+
+    lines.append("")
+    lines.append("REPORT COMPLETE")
+
+    return "\n".join(lines)
+
+
+def pentest_handler(message):
+    if not membership_required(message):
+        return
+
+    domain = validate(message)
+
+    if not domain:
+        return
+
+    if not check_and_deduct_point(message.from_user.id):
+        bot.reply_to(message, "❌ Points አልቋል።")
+        return
+
+    status = bot.send_message(
+        message.chat.id,
+        f"🛠️ Advanced Security Report: {domain}\n"
+        "እየተዘጋጀ ነው..."
+    )
+
+    try:
+        report = advanced_pentest_report(domain)
+
+        try:
+            bot.delete_message(
+                message.chat.id,
+                status.message_id
+            )
+        except Exception:
+            pass
+
+        send_txt(
+            message.chat.id,
+            f"pentest_report_{domain}.txt",
+            report,
+            f"🛡️ Advanced Security Report: {domain}"
+        )
 
     except Exception:
-        return [
-            f"🎯 {domain}",
-            "Status: No Response"
-        ]
+        log.exception("Pentest report failed")
+        bot.send_message(
+            message.chat.id,
+            "❌ Security Report ማዘጋጀት አልተቻለም።"
+        )
 
+
+# ==================================================
+# BULK HOST CHECKER
+# ==================================================
 
 def bulk_handler(message):
-    chat_id = message.chat.id
+    if not membership_required(message):
+        return
 
-    domains = []
+    uid = message.from_user.id
+
+    if not check_and_deduct_point(uid):
+        bot.reply_to(message, "❌ Points አልቋል።")
+        return
 
     if message.document:
         try:
@@ -628,69 +1042,108 @@ def bulk_handler(message):
     else:
         content = message.text or ""
 
-    for item in content.splitlines():
-        d = clean_domain(item)
+    domains = []
 
-        if d and d not in domains:
-            domains.append(d)
+    for line in content.splitlines():
+        domain = clean_domain(line)
+
+        if domain and domain not in domains:
+            domains.append(domain)
 
     if not domains:
         bot.reply_to(message, "❌ Domain አልተገኘም።")
         return
 
-    lines = title_block("BULK HOST REPORT")
+    # Keep bulk requests bounded
+    domains = domains[:100]
 
-    for d in domains[:100]:
-        lines.extend(check_bulk_host(d))
+    lines = title_block("BULK HOST REPORT")
+    lines.append(f"Total Domains: {len(domains)}")
+    lines.append("")
+
+    for domain in domains:
+        lines.append(f"DOMAIN: {domain}")
+
+        try:
+            response = session.get(
+                f"https://{domain}/",
+                timeout=TIMEOUT,
+                allow_redirects=True,
+                stream=True
+            )
+
+            lines.append(
+                f"HTTPS Status: {response.status_code}"
+            )
+
+            lines.append(
+                f"Server: {response.headers.get('Server', 'Unknown')}"
+            )
+
+            response.close()
+
+        except Exception as e:
+            lines.append(
+                f"HTTPS Error: {type(e).__name__}"
+            )
+
         lines.append("")
 
     send_txt(
-        chat_id,
-        "bulk_host_report.txt",
+        message.chat.id,
+        "netx_bulk_report.txt",
         "\n".join(lines),
-        "Bulk Host Report"
+        "📦 Bulk Host Report"
     )
 
 
-# ==========================================
-# PREMIUM PAYMENT SYSTEM
-# ==========================================
+# ==================================================
+# PREMIUM PAYMENT
+# ==================================================
 
 @bot.callback_query_handler(
     func=lambda c: c.data in ["buy_month", "buy_year"]
 )
 def premium_callback(call):
+    uid = call.from_user.id
+
+    if uid != ADMIN_ID and check_membership(uid):
+        bot.answer_callback_query(
+            call.id,
+            "Join both channels first.",
+            show_alert=True
+        )
+        send_join_message(call.message.chat.id)
+        return
+
     bot.answer_callback_query(call.id)
 
-    chat_id = call.message.chat.id
-
     if call.data == "buy_month":
-        plan_name = "1 ወር (Monthly)"
-        price = "100 ETB"
-        plan_code = "month"
-
+        plan = {
+            "plan_name": "Monthly",
+            "price": "100 ETB",
+            "plan_code": "month"
+        }
     else:
-        plan_name = "1 ዓመት (Yearly)"
-        price = "400 ETB"
-        plan_code = "year"
+        plan = {
+            "plan_name": "Yearly",
+            "price": "400 ETB",
+            "plan_code": "year"
+        }
 
-    waiting_for_tx[chat_id] = {
-        "plan_name": plan_name,
-        "price": price,
-        "plan_code": plan_code
-    }
+    waiting_for_tx[uid] = plan
 
     bot.send_message(
-        chat_id,
-        f"💎 የተመረጠው ፓኬጅ: {plan_name}\n"
-        f"💰 ዋጋ: {price}\n\n"
-        f"💳 Telebirr ቁጥር: {TELEBIRR_PHONE}\n"
-        f"👤 ስም: {TELEBIRR_NAME}\n\n"
-        "ክፍያውን ከፈጸሙ በኋላ ከሚከተሉት አንዱን ይላኩ:\n\n"
+        call.message.chat.id,
+        f"💎 Package: {plan['plan_name']}\n"
+        f"💰 Price: {plan['price']}\n\n"
+        f"Telebirr Number: {TELEBIRR_PHONE}\n"
+        f"Account Name: {TELEBIRR_NAME}\n\n"
+        "ክፍያውን ከፈጸሙ በኋላ ከሚከተሉት አንዱን ይላኩ:\n"
         "📸 Screenshot\n"
         "📁 Document\n"
         "📝 Transaction ID\n\n"
-        "ለመሰረዝ /cancel ይጻፉ።"
+        "/cancel በመጻፍ መሰረዝ ይችላሉ።"
     )
 
 
@@ -699,33 +1152,24 @@ def premium_callback(call):
     func=lambda m: m.chat.id in waiting_for_tx
 )
 def handle_payment_evidence(message):
-    chat_id = message.chat.id
+    if not membership_required(message):
+        return
 
-    plan = waiting_for_tx.get(chat_id)
+    uid = message.from_user.id
+    plan = waiting_for_tx.get(uid)
 
     if not plan:
         return
 
     if message.content_type == "text":
-        tx_code = (message.text or "").strip()
+        tx = (message.text or "").strip()
 
-        if tx_code.lower() == "/cancel":
-            waiting_for_tx.pop(chat_id, None)
-
-            bot.reply_to(
-                message,
-                "❌ የክፍያ ሂደቱ ተሰርዟል።"
-            )
+        if tx.lower() == "/cancel":
+            waiting_for_tx.pop(uid, None)
+            bot.reply_to(message, "❌ Payment cancelled.")
             return
 
-        if not tx_code:
-            bot.reply_to(
-                message,
-                "Transaction ID ወይም Screenshot ይላኩ።"
-            )
-            return
-
-        evidence = f"Transaction ID: {tx_code}"
+        evidence = f"Transaction ID: {tx}"
 
     elif message.content_type == "photo":
         evidence = "Payment Screenshot"
@@ -738,17 +1182,17 @@ def handle_payment_evidence(message):
 
     username = message.from_user.username or "None"
 
-    admin_caption = (
+    caption = (
         "🔔 NEW PAYMENT SUBMISSION\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"User ID: {chat_id}\n"
+        f"User ID: {uid}\n"
         f"Username: @{username}\n"
         f"Package: {plan['plan_name']}\n"
         f"Price: {plan['price']}\n"
         f"Evidence: {evidence}\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"Monthly: /approve {chat_id}\n"
-        f"Yearly: /approve_year {chat_id}"
+        f"Monthly: /approve {uid}\n"
+        f"Yearly: /approve_year {uid}"
     )
 
     try:
@@ -756,58 +1200,57 @@ def handle_payment_evidence(message):
             bot.send_photo(
                 ADMIN_ID,
                 message.photo[-1].file_id,
-                caption=admin_caption
+                caption=caption
             )
 
         elif message.content_type == "document":
             bot.send_document(
                 ADMIN_ID,
                 message.document.file_id,
-                caption=admin_caption
+                caption=caption
             )
 
         else:
             bot.send_message(
                 ADMIN_ID,
-                admin_caption
+                caption
             )
 
-        waiting_for_tx.pop(chat_id, None)
+        waiting_for_tx.pop(uid, None)
 
         bot.reply_to(
             message,
-            "✅ የክፍያ ማስረጃዎ ለአድሚን ተልኳል።\n"
-            "አድሚኑ ካረጋገጠ በኋላ Premium ይከፈትልዎታል።"
+            "✅ የክፍያ ማስረጃዎ ለአድሚን ተልኳል። "
+            "ከተረጋገጠ በኋላ Premium ይከፈታል።"
         )
 
     except Exception:
-        log.exception("Payment evidence forwarding failed")
-
+        log.exception("Payment forwarding failed")
         bot.reply_to(
             message,
-            "❌ ማስረጃውን መላክ አልተቻለም። "
-            "እንደገና ይሞክሩ።"
+            "❌ ማስረጃውን መላክ አልተቻለም።"
         )
 
 
-# ==========================================
+# ==================================================
 # MAIN MENU ROUTER
-# ==========================================
+# ==================================================
 
-@bot.message_handler(content_types=["text"], func=lambda m: True)
+@bot.message_handler(
+    content_types=["text"],
+    func=lambda m: True
+)
 def route(message):
+    if not membership_required(message):
+        return
+
     text = (message.text or "").strip()
-    chat_id = message.chat.id
+    uid = message.from_user.id
+
+    user_points.setdefault(uid, 20)
 
     if text == "🌐 DNS Lookup":
-        ask_domain(
-            message,
-            lambda m: bot.send_message(
-                chat_id,
-                dns_result(validate(m))[:4000]
-                if validate(m) else "Invalid domain"
-            )
-        )
+        ask_domain(message, dns_handler)
 
     elif text == "🚀 Subdomain Finder":
         ask_domain(message, subdomain_handler)
@@ -818,45 +1261,42 @@ def route(message):
     elif text == "🔍 Host Scanner (Bug Host)":
         ask_domain(message, host_scanner_handler)
 
-    elif text == "📦 Bulk Host Checker (Unlimited)":
-        p = bot.send_message(
-            chat_id,
-            "የDomain ዝርዝር ይላኩ ወይም TXT File ያያይዙ።"
+    elif text == "📦 Bulk Host Checker":
+        prompt = bot.send_message(
+            message.chat.id,
+            "TXT File ወይም Domains በአዲስ መስመር ይላኩ።"
         )
 
-        bot.register_next_step_handler(p, bulk_handler)
+        bot.register_next_step_handler(
+            prompt,
+            bulk_handler
+        )
 
     elif text == "👤 My Profile / Points":
-        active = is_premium(chat_id)
+        active = is_premium(uid)
 
-        status = (
-            "Premium Active"
-            if active else "Free User"
-        )
-
-        points = (
-            "Unlimited"
-            if active else str(user_points.get(chat_id, 20))
-        )
+        status = "Premium Active" if active else "Free User"
+        points = "Unlimited" if active else user_points.get(uid, 20)
 
         bot.send_message(
-            chat_id,
-            f"👤 USER PROFILE\n"
-            f"Telegram ID: {chat_id}\n"
+            message.chat.id,
+            "👤 USER PROFILE\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"ID: {uid}\n"
             f"Status: {status}\n"
             f"Points: {points}"
         )
 
     elif text == "👥 Referral Program":
-        ref_link = (
+        link = (
             f"https://t.me/{bot.get_me().username}"
-            f"?start=REF_{chat_id}"
+            f"?start=REF_{uid}"
         )
 
         bot.send_message(
-            chat_id,
+            message.chat.id,
             f"👥 REFERRAL PROGRAM\n\n"
-            f"Referral Link:\n{ref_link}\n\n"
+            f"Your Link:\n{link}\n\n"
             "አዲስ ተጠቃሚ ሲገባ +20 Points ያገኛሉ።"
         )
 
@@ -865,26 +1305,26 @@ def route(message):
 
         markup.add(
             types.InlineKeyboardButton(
-                "📅 1 ወር — 100 ETB",
+                "📅 Monthly - 100 ETB",
                 callback_data="buy_month"
             ),
             types.InlineKeyboardButton(
-                "📆 1 ዓመት — 400 ETB",
+                "📆 Yearly - 400 ETB",
                 callback_data="buy_year"
             )
         )
 
         bot.send_message(
-            chat_id,
+            message.chat.id,
             "💎 PREMIUM ACCESS\n"
             "የሚፈልጉትን ፓኬጅ ይምረጡ።",
             reply_markup=markup
         )
 
     elif text == "👨‍💻 Admin Contact":
-        k = types.InlineKeyboardMarkup()
+        markup = types.InlineKeyboardMarkup()
 
-        k.add(
+        markup.add(
             types.InlineKeyboardButton(
                 "Contact Admin",
                 url=ADMIN_CONTACT
@@ -892,50 +1332,22 @@ def route(message):
         )
 
         bot.send_message(
-            chat_id,
-            "NETX TOOLS PRO — ADMIN CONTACT",
-            reply_markup=k
+            message.chat.id,
+            "NETX TOOLS PRO - ADMIN CONTACT",
+            reply_markup=markup
         )
 
     else:
         bot.send_message(
-            chat_id,
-            "እባክዎ ከምናሌው አንዱን ይምረጡ።",
+            message.chat.id,
+            "ከምናሌው አንዱን ይምረጡ።",
             reply_markup=menu()
         )
 
 
-# ==========================================
-# DNS LOOKUP
-# ==========================================
-
-def dns_result(domain):
-    lines = title_block("DNS LOOKUP", domain)
-
-    try:
-        ips = sorted({
-            x[4][0]
-            for x in socket.getaddrinfo(
-                domain,
-                None,
-                type=socket.SOCK_STREAM
-            )
-        })
-
-        lines.append(f"Total IPs Found: {len(ips)}")
-
-        for ip in ips[:25]:
-            lines.append(f"• {ip}")
-
-    except Exception as e:
-        lines.append(f"DNS failed: {type(e).__name__}")
-
-    return "\n".join(lines)
-
-
-# ==========================================
+# ==================================================
 # FLASK HEALTH CHECK
-# ==========================================
+# ==================================================
 
 @app.route("/")
 def home():
@@ -947,9 +1359,7 @@ def home():
 
 @app.route("/health")
 def health():
-    return jsonify({
-        "status": "ok"
-    }), 200
+    return jsonify({"status": "ok"}), 200
 
 
 def run_flask():
@@ -960,9 +1370,9 @@ def run_flask():
     )
 
 
-# ==========================================
-# START BOT
-# ==========================================
+# ==================================================
+# START
+# ==================================================
 
 if __name__ == "__main__":
     threading.Thread(
@@ -970,10 +1380,10 @@ if __name__ == "__main__":
         daemon=True
     ).start()
 
-    log.info("NetXToolsPro starting...")
+    log.info("NetXToolsPro started")
 
     bot.infinity_polling(
         skip_pending=True,
         timeout=30,
         long_polling_timeout=60
-        )
+                )
