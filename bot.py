@@ -1,7 +1,6 @@
 import os
 import re
 import io
-import ssl
 import time
 import socket
 import logging
@@ -17,7 +16,7 @@ from flask import Flask, jsonify
 # ⚙️ የቦት ማስተካከያ (CONFIGURATIONS)
 # ==========================================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
-ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
+ADMIN_CONTACT = "https://t.me/None_Breaker"
 ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
 
 # 💳 የቴሌብር መረጃ
@@ -39,7 +38,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/15.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/16.0"})
 
 # 📊 ዴታቤዝ
 user_points = {}        
@@ -119,7 +118,7 @@ def ask_domain(message, callback):
             "2. 👥 **Referral Program** በመጠቀም ጓደኞችን ይጋብዙ እና ነፃ ፖይንት ያግኙ!", parse_mode="Markdown")
         return
     
-    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`):", parse_mode="Markdown")
+    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`, `ethiotelecom.et`):", parse_mode="Markdown")
     bot.register_next_step_handler(m, callback)
 
 
@@ -594,7 +593,7 @@ def premium_callback(call):
     )
 
 
-# 🎯 የተስተካከለ የፎቶ መቀበያ (ሰርቨሩ በቀጥታ ፎቶውን ከፍቶ ለአድሚን በድጋሚ እንዲልክ የሚያደርግ ሎጂክ)
+# 🎯 ፎቶዎችን በቀጥታ እና ያለምንም ችግር ወደ አድሚን የሚልክ ጠንካራ ሃንድለር
 @bot.message_handler(content_types=['photo'])
 def handle_payment_screenshot(message):
     chat_id = message.chat.id
@@ -610,7 +609,6 @@ def handle_payment_screenshot(message):
     )
     
     try:
-        # ፎቶውን በቀጥታ ወደ አድሚን መላክ (Send Photo instead of Forward)
         bot.send_photo(ADMIN_ID, file_id, caption=caption_text, parse_mode="Markdown")
         bot.reply_to(
             message,
@@ -619,8 +617,8 @@ def handle_payment_screenshot(message):
             parse_mode="Markdown"
         )
     except Exception as e:
-        log.error(f"Failed to send photo to admin: {e}")
-        bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ ድጋሚ ይሞክሩ።", parse_mode="Markdown")
+        log.error(f"Error sending photo to admin: {e}")
+        bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።", parse_mode="Markdown")
 
 
 @bot.message_handler(content_types=["text"], func=lambda m: True)
@@ -708,5 +706,5 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with Direct Photo Send starting")
+    log.info("NetX Tools Pro with Direct Photo Send Handler starting")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
