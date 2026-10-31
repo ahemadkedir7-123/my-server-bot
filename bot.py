@@ -19,7 +19,7 @@ BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0"
 ADMIN_CONTACT = "https://t.me/None_Breaker"
 PORT = int(os.getenv("PORT", "10000"))
 TIMEOUT = 60
-MAX_BULK_HOSTS = 20
+MAX_BULK_HOSTS = 200000
 SECURITY_HEADERS = [
     "Strict-Transport-Security", "Content-Security-Policy",
     "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy"
