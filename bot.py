@@ -394,7 +394,7 @@ def reject_payment(message):
     try:
         bot.send_message(
             uid,
-            f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\n\n"
+            f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\n"
             f"ምክንያት: {reason}"
         )
         bot.reply_to(message, f"✅ User {uid} rejected successfully.")
