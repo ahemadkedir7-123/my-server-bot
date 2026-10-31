@@ -371,58 +371,35 @@ def approve_year(message):
     except Exception:
         pass
 
-    @bot.message_handler(commands=['reject'])
+    @bot.message_handler(commands=["reject"])
 def reject_payment(message):
     if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "❌ ይህን ትዕዛዝ መጠቀም የሚችለው Admin ብቻ ነው።")
+        bot.reply_to(message, "❌ Admin ብቻ ይህን መጠቀም ይችላል።")
         return
 
     parts = message.text.split(maxsplit=2)
 
-    if len(parts) < 2:
-        bot.reply_to(
-            message,
-            "⚠️ አጠቃቀም:\n"
-            "/reject USER_ID ምክንያት\n\n"
-            "ምሳሌ:\n"
-            "/reject 8608096447 የክፍያ ማረጋገጫው አልተረጋገጠም።"
-        )
+    if len(parts) < 2 or not parts[1].isdigit():
+        bot.reply_to(message, "Usage: /reject USER_ID reason")
         return
 
-    try:
-        user_id = int(parts[1])
-    except ValueError:
-        bot.reply_to(message, "❌ User ID ትክክል አይደለም።")
-        return
-
+    uid = int(parts[1])
     reason = parts[2] if len(parts) > 2 else "የክፍያ ማረጋገጫው አልተቀበለም።"
 
-    # የክፍያ ማስረጃ መጠባበቂያን አጽዳ
     if isinstance(waiting_for_tx, dict):
-        waiting_for_tx.pop(user_id, None)
+        waiting_for_tx.pop(uid, None)
     elif isinstance(waiting_for_tx, set):
-        waiting_for_tx.discard(user_id)
+        waiting_for_tx.discard(uid)
 
     try:
         bot.send_message(
-            user_id,
-            "❌ **የክፍያ ጥያቄዎ ውድቅ ተደርጓል።**\n\n"
-            f"📌 ምክንያት: {reason}\n\n"
-            "እባክዎ ማስረጃዎን ደግመው ያረጋግጡ።\n"
-            "ለተጨማሪ እገዛ Admin ያነጋግሩ።",
-            parse_mode="Markdown"
+            uid,
+            f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\n\n"
+            f"ምክንያት: {reason}"
         )
-
-        bot.reply_to(
-            message,
-            f"✅ User {user_id} የክፍያ ጥያቄ ውድቅ ተደርጓል።"
-        )
-
+        bot.reply_to(message, f"✅ User {uid} rejected successfully.")
     except Exception as e:
-        bot.reply_to(
-            message,
-            f"⚠️ ውድቅ ተደርጓል፣ ግን ለተጠቃሚው መልዕክት መላክ አልተቻለም።\n{e}"
-        )
+        bot.reply_to(message, f"⚠️ Error: {e}")
 @bot.message_handler(commands=["revoke"])
 def revoke_user(message):
     if message.from_user.id != ADMIN_ID:
