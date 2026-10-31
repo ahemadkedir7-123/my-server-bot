@@ -16,7 +16,7 @@ from flask import Flask, jsonify
 # ⚙️ የቦት ማስተካከያ (CONFIGURATIONS)
 # ==========================================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
-ADMIN_CONTACT = "https://t.me/None_Breaker"
+ADMIN_CONTACT = "https://t.me/Nonebreaker_bot"
 ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
 
 # 💳 የቴሌብር መረጃ
@@ -38,13 +38,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/16.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/17.0"})
 
-# 📊 ዴታቤዝ
+# 📊 ዴታቤዝ እና ስቴቶች
 user_points = {}        
 premium_users = {}      
 user_referrals = {}     
 referred_users = set()  
+waiting_for_proof = set() # ስክሪን ሾት እንዲልክ የተጠየቁ ተጠቃሚዎች መለያ (State)
 
 
 def clean_domain(value):
@@ -564,7 +565,7 @@ def bulk_handler(message):
 
 
 # ==========================================
-# 💎 PREMIUM PRICING & SCREENSHOT PAYMENT FLOW
+# 💎 PREMIUM PRICING & STATE-BASED PROOF FLOW
 # ==========================================
 @bot.callback_query_handler(func=lambda c: c.data in ["buy_month", "buy_year"])
 def premium_callback(call):
@@ -578,6 +579,9 @@ def premium_callback(call):
         plan_name = "1 ዓመት (Yearly)"
         price = "400 ETB"
         
+    # ተጠቃሚውን ለስክሪን ሾት ዝግጁ ባለቤት እናደርገዋለን (State ON)
+    waiting_for_proof.add(chat_id)
+    
     bot.send_message(
         chat_id,
         f"💎 **የመረጡት ፓኬጅ:** `{plan_name}`\n"
@@ -587,37 +591,51 @@ def premium_callback(call):
         f"• ስም: `{TELEBIRR_NAME}`\n\n"
         "🚨 **ማስጠንቀቂያ:**\n"
         "ሐሰተኛ ስክሪን ሾት መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል።\n\n"
-        "📸 **እንዴት ያረጋግጡ?**\n"
-        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) በቀጥታ ወደዚህ ቻት ይላኩ!",
+        "📸 **አሁን ያረጋግጡ!**\n"
+        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) ወይም የትራንዛክሽን መረጃ በቀጥታ ወደዚህ ቻት ይላኩ!",
         parse_mode="Markdown"
     )
 
 
-# 🎯 ፎቶዎችን በቀጥታ እና ያለምንም ችግር ወደ አድሚን የሚልክ ጠንካራ ሃንድለር
-@bot.message_handler(content_types=['photo'])
-def handle_payment_screenshot(message):
+# 🎯 ስቴቱ በርቶ ሳለ ፎቶ ወይም ፅሁፍ ሲልክ በቀጥታ ወደ አድሚን የሚልክ ጠንካራ ሃንድለር
+@bot.message_handler(content_types=['photo', 'text'], func=lambda m: m.chat.id in waiting_for_proof)
+def handle_payment_proof(message):
     chat_id = message.chat.id
-    file_id = message.photo[-1].file_id
-    
-    caption_text = (
-        f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
-        f"👤 **Sender ID:** `{chat_id}`\n"
-        f"👤 **Username:** @{message.from_user.username or 'None'}\n\n"
-        f"👇 **ለማጽደቅ የሚከተሉትን ትዕዛዞች ይጠቀሙ:**\n"
-        f"• 1 ወር ለመስጠት: `/approve {chat_id}`\n"
-        f"• 1 ዓመት ለመስጠት: `/approve_year {chat_id}`"
-    )
+    waiting_for_proof.discard(chat_id) # አንዴ ከላከ በኋላ ስቴቱን እናጠፋዋለን
     
     try:
-        bot.send_photo(ADMIN_ID, file_id, caption=caption_text, parse_mode="Markdown")
+        if message.content_type == 'photo':
+            file_id = message.photo[-1].file_id
+            caption_text = (
+                f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
+                f"👤 **Sender ID:** `{chat_id}`\n"
+                f"👤 **Username:** @{message.from_user.username or 'None'}\n\n"
+                f"👇 **ለማጽደቅ:**\n"
+                f"• 1 ወር: `/approve {chat_id}`\n"
+                f"• 1 ዓመት: `/approve_year {chat_id}`"
+            )
+            bot.send_photo(ADMIN_ID, file_id, caption=caption_text, parse_mode="Markdown")
+        else:
+            text_proof = message.text
+            caption_text = (
+                f"🔔 **አዲስ የክፍያ ፅሁፍ/ID ደርሷል!**\n"
+                f"👤 **Sender ID:** `{chat_id}`\n"
+                f"👤 **Username:** @{message.from_user.username or 'None'}\n"
+                f"📝 **Details:** `{text_proof}`\n\n"
+                f"👇 **ለማጽደቅ:**\n"
+                f"• 1 ወር: `/approve {chat_id}`\n"
+                f"• 1 ዓመት: `/approve_year {chat_id}`"
+            )
+            bot.send_message(ADMIN_ID, caption_text, parse_mode="Markdown")
+
         bot.reply_to(
             message,
-            "✅ **የክፍያ ማረጋገጫዎ (Screenshot) ለአድሚን ተልኳል!**\n"
+            "✅ **የክፍያ ማረጋገጫዎ ለአድሚን ተልኳል!**\n"
             "አድሚኑ ክፍያዎን ሲያረጋግጥ ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
             parse_mode="Markdown"
         )
     except Exception as e:
-        log.error(f"Error sending photo to admin: {e}")
+        log.error(f"Error handling payment proof: {e}")
         bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።", parse_mode="Markdown")
 
 
@@ -706,5 +724,5 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with Direct Photo Send Handler starting")
+    log.info("NetX Tools Pro with State-Based Proof Handler starting")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
