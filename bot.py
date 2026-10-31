@@ -17,7 +17,7 @@ from flask import Flask, jsonify
 # ==========================================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
 ADMIN_CONTACT = "https://t.me/Nonebreaker_bot"
-ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
+ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_2](start_span)[span_2](end_span)
 
 # 💳 የቴሌብር መረጃ
 TELEBIRR_NAME = "ሸምሰዲን ሺፈ (Shemsadin Shifa)"
@@ -38,14 +38,14 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/17.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/18.0"})
 
 # 📊 ዴታቤዝ እና ስቴቶች
 user_points = {}        
 premium_users = {}      
 user_referrals = {}     
 referred_users = set()  
-waiting_for_proof = set() # ስክሪን ሾት እንዲልክ የተጠየቁ ተጠቃሚዎች መለያ (State)
+waiting_for_tx = set()  # ትራንዛክሽን ኮድ እንዲልክ የሚጠበቁ ተጠቃሚዎች
 
 
 def clean_domain(value):
@@ -163,7 +163,7 @@ def start(message):
         "🚀 **NETX TOOLS PRO (ULTIMATE CYBER SUITE)**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎁 **የእርስዎ ቀሪ ፖይንት:** `{user_points.get(chat_id, 20)} Points`\n\n"
-        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።[span_1](start_span)[span_1](end_span)\n"
+        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።[span_3](start_span)[span_3](end_span)\n"
         "🛠️ **Advanced Pentest:** ሴኪዩሪቲ ሄደሮች እና ኤችቲቲፒ ሜተዶችን ይመረምራል።\n"
         "🔍 **Host Scanner:** ፖርቶችን እና Bug Host ሁኔታዎችን አብጠርጥሮ ያወጣል።\n"
         "💎 **Unlimited / Premium:** በቴሌብር በመክፈል ፕሪሚየም ይሁኑ።\n\n"
@@ -185,7 +185,7 @@ def approve_month(message):
         premium_users[uid] = expiry
         bot.reply_to(message, f"✅ ተጠቃሚ `{uid}` አሁን ለ **1 ወር (Monthly Premium)** ፕሪሚየም ሆኗል!", parse_mode="Markdown")
         try:
-            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ወር የክፍያ ማረጋገጫዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
+            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ወር ክፍያዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
         except Exception:
             pass
     else:
@@ -203,7 +203,7 @@ def approve_year(message):
         premium_users[uid] = expiry
         bot.reply_to(message, f"✅ ተጠቃሚ `{uid}` አሁን ለ **1 ዓመት (Yearly Premium)** ፕሪሚየም ሆኗል!", parse_mode="Markdown")
         try:
-            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ዓመት የክፍያ ማረጋገጫዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
+            bot.send_message(uid, "🎉 **እንኳን ደስ አለዎት!** የ 1 ዓመት ክፍያዎ ተረጋግጦ ቦቱ በፕሪሚየም (Unlimited) ተከፍቷል!", parse_mode="Markdown")
         except Exception:
             pass
     else:
@@ -225,7 +225,7 @@ def revoke_user(message):
 
 
 # ==========================================
-# 🔎 DEEP SUBDOMAIN FINDER[span_2](start_span)[span_2](end_span)
+# 🔎 DEEP SUBDOMAIN FINDER[span_4](start_span)[span_4](end_span)
 # ==========================================
 def find_subdomains(domain):
     found, notes = set(), []
@@ -565,7 +565,7 @@ def bulk_handler(message):
 
 
 # ==========================================
-# 💎 PREMIUM PRICING & STATE-BASED PROOF FLOW
+# 💎 PREMIUM PRICING & TRANSACTION ID FLOW
 # ==========================================
 @bot.callback_query_handler(func=lambda c: c.data in ["buy_month", "buy_year"])
 def premium_callback(call):
@@ -579,8 +579,8 @@ def premium_callback(call):
         plan_name = "1 ዓመት (Yearly)"
         price = "400 ETB"
         
-    # ተጠቃሚውን ለስክሪን ሾት ዝግጁ ባለቤት እናደርገዋለን (State ON)
-    waiting_for_proof.add(chat_id)
+    # ተጠቃሚው የትራንዛክሽን ኮድ እንዲልክ እናስችለዋለን
+    waiting_for_tx.add(chat_id)
     
     bot.send_message(
         chat_id,
@@ -590,53 +590,41 @@ def premium_callback(call):
         f"• ቁጥር: `{TELEBIRR_PHONE}`\n"
         f"• ስም: `{TELEBIRR_NAME}`\n\n"
         "🚨 **ማስጠንቀቂያ:**\n"
-        "ሐሰተኛ ስክሪን ሾት መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል።\n\n"
-        "📸 **አሁን ያረጋግጡ!**\n"
-        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) ወይም የትራንዛክሽን መረጃ በቀጥታ ወደዚህ ቻት ይላኩ!",
+        "ሐሰተኛ የትራንዛክሽን ኮድ መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል።\n\n"
+        "📝 **አሁን ያረጋግጡ!**\n"
+        "ብሩን ከከፈሉ በኋላ የቴሌብር **Transaction ID / Reference Number** (ለምሳሌ: `FT26250JV14K`) በቀጥታ በዚህ ቻት ጽፈው ይላኩ!",
         parse_mode="Markdown"
     )
 
 
-# 🎯 ስቴቱ በርቶ ሳለ ፎቶ ወይም ፅሁፍ ሲልክ በቀጥታ ወደ አድሚን የሚልክ ጠንካራ ሃንድለር
-@bot.message_handler(content_types=['photo', 'text'], func=lambda m: m.chat.id in waiting_for_proof)
-def handle_payment_proof(message):
+# 🎯 የትራንዛክሽን ኮድ (Transaction ID) መቀበያ እና ለአድሚን ማስተላለፊያ
+@bot.message_handler(content_types=['text'], func=lambda m: m.chat.id in waiting_for_tx)
+def handle_transaction_id(message):
     chat_id = message.chat.id
-    waiting_for_proof.discard(chat_id) # አንዴ ከላከ በኋላ ስቴቱን እናጠፋዋለን
+    tx_code = message.text.strip()
+    waiting_for_tx.discard(chat_id)
+    
+    caption_text = (
+        f"🔔 **አዲስ የቴሌብር Transaction ID ደርሷል!**\n"
+        f"👤 **Sender ID:** `{chat_id}`\n"
+        f"👤 **Username:** @{message.from_user.username or 'None'}\n"
+        f"💳 **Transaction ID:** `{tx_code}`\n\n"
+        f"👇 **ለማጽደቅ የሚከተሉትን ትዕዛዞች ይጠቀሙ:**\n"
+        f"• 1 ወር ለመስጠት: `/approve {chat_id}`\n"
+        f"• 1 ዓመት ለመስጠት: `/approve_year {chat_id}`"
+    )
     
     try:
-        if message.content_type == 'photo':
-            file_id = message.photo[-1].file_id
-            caption_text = (
-                f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
-                f"👤 **Sender ID:** `{chat_id}`\n"
-                f"👤 **Username:** @{message.from_user.username or 'None'}\n\n"
-                f"👇 **ለማጽደቅ:**\n"
-                f"• 1 ወር: `/approve {chat_id}`\n"
-                f"• 1 ዓመት: `/approve_year {chat_id}`"
-            )
-            bot.send_photo(ADMIN_ID, file_id, caption=caption_text, parse_mode="Markdown")
-        else:
-            text_proof = message.text
-            caption_text = (
-                f"🔔 **አዲስ የክፍያ ፅሁፍ/ID ደርሷል!**\n"
-                f"👤 **Sender ID:** `{chat_id}`\n"
-                f"👤 **Username:** @{message.from_user.username or 'None'}\n"
-                f"📝 **Details:** `{text_proof}`\n\n"
-                f"👇 **ለማጽደቅ:**\n"
-                f"• 1 ወር: `/approve {chat_id}`\n"
-                f"• 1 ዓመት: `/approve_year {chat_id}`"
-            )
-            bot.send_message(ADMIN_ID, caption_text, parse_mode="Markdown")
-
+        bot.send_message(ADMIN_ID, caption_text, parse_mode="Markdown")
         bot.reply_to(
             message,
-            "✅ **የክፍያ ማረጋገጫዎ ለአድሚን ተልኳል!**\n"
-            "አድሚኑ ክፍያዎን ሲያረጋግጥ ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
+            "✅ **የቴሌብር ትራንዛክሽን ኮድዎ ለአድሚን ተልኳል!**\n"
+            "አድሚኑ ኮዱን ሲያረጋግጥ ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
             parse_mode="Markdown"
         )
     except Exception as e:
-        log.error(f"Error handling payment proof: {e}")
-        bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።", parse_mode="Markdown")
+        log.error(f"Error sending Transaction ID to admin: {e}")
+        bot.reply_to(message, "❌ ኮዱን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።", parse_mode="Markdown")
 
 
 @bot.message_handler(content_types=["text"], func=lambda m: True)
@@ -724,5 +712,5 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with State-Based Proof Handler starting")
+    log.info("NetX Tools Pro with Transaction ID Flow starting")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
