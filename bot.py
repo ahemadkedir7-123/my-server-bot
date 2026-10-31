@@ -85,7 +85,7 @@ def ask_domain(message, callback):
 def validate(message):
     d = domain_ok(message.text)
     if not d:
-        bot.reply_to(message, "❌ **Domain ትክክል አይደለም።** ምሳሌ: `example.com`", parse_mode="Markdown")
+        bot.reply_to(message, "❌ **Domain ትክክል አይደለም።** ምሳሌ: ``", parse_mode="Markdown")
     return d
 
 
