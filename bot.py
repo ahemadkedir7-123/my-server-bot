@@ -371,7 +371,58 @@ def approve_year(message):
     except Exception:
         pass
 
+    @bot.message_handler(commands=['reject'])
+def reject_payment(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "❌ ይህን ትዕዛዝ መጠቀም የሚችለው Admin ብቻ ነው።")
+        return
 
+    parts = message.text.split(maxsplit=2)
+
+    if len(parts) < 2:
+        bot.reply_to(
+            message,
+            "⚠️ አጠቃቀም:\n"
+            "/reject USER_ID ምክንያት\n\n"
+            "ምሳሌ:\n"
+            "/reject 8608096447 የክፍያ ማረጋገጫው አልተረጋገጠም።"
+        )
+        return
+
+    try:
+        user_id = int(parts[1])
+    except ValueError:
+        bot.reply_to(message, "❌ User ID ትክክል አይደለም።")
+        return
+
+    reason = parts[2] if len(parts) > 2 else "የክፍያ ማረጋገጫው አልተቀበለም።"
+
+    # የክፍያ ማስረጃ መጠባበቂያን አጽዳ
+    if isinstance(waiting_for_tx, dict):
+        waiting_for_tx.pop(user_id, None)
+    elif isinstance(waiting_for_tx, set):
+        waiting_for_tx.discard(user_id)
+
+    try:
+        bot.send_message(
+            user_id,
+            "❌ **የክፍያ ጥያቄዎ ውድቅ ተደርጓል።**\n\n"
+            f"📌 ምክንያት: {reason}\n\n"
+            "እባክዎ ማስረጃዎን ደግመው ያረጋግጡ።\n"
+            "ለተጨማሪ እገዛ Admin ያነጋግሩ።",
+            parse_mode="Markdown"
+        )
+
+        bot.reply_to(
+            message,
+            f"✅ User {user_id} የክፍያ ጥያቄ ውድቅ ተደርጓል።"
+        )
+
+    except Exception as e:
+        bot.reply_to(
+            message,
+            f"⚠️ ውድቅ ተደርጓል፣ ግን ለተጠቃሚው መልዕክት መላክ አልተቻለም።\n{e}"
+        )
 @bot.message_handler(commands=["revoke"])
 def revoke_user(message):
     if message.from_user.id != ADMIN_ID:
