@@ -347,6 +347,10 @@ def approve_month(message):
         pass
 
 
+# ==========================================
+# ADMIN: APPROVE YEARLY
+# ==========================================
+
 @bot.message_handler(commands=["approve_year"])
 def approve_year(message):
     if message.from_user.id != ADMIN_ID:
@@ -367,11 +371,19 @@ def approve_year(message):
     bot.reply_to(message, f"✅ User {uid} approved for 365 days.")
 
     try:
-        bot.send_message(uid, "🎉 Yearly Premium ተከፍቷል!")
+        bot.send_message(
+            uid,
+            "🎉 የዓመታዊ Premium ፈቃድዎ ተረጋግጧል!"
+        )
     except Exception:
         pass
 
-    @bot.message_handler(commands=["reject"])
+
+# ==========================================
+# ADMIN: REJECT PAYMENT
+# ==========================================
+
+@bot.message_handler(commands=["reject"])
 def reject_payment(message):
     if message.from_user.id != ADMIN_ID:
         bot.reply_to(message, "❌ Admin ብቻ ይህን መጠቀም ይችላል።")
@@ -380,11 +392,20 @@ def reject_payment(message):
     parts = message.text.split(maxsplit=2)
 
     if len(parts) < 2 or not parts[1].isdigit():
-        bot.reply_to(message, "Usage: /reject USER_ID reason")
+        bot.reply_to(
+            message,
+            "Usage: /reject USER_ID reason\n"
+            "Example: /reject 123456789 Invalid payment"
+        )
         return
 
     uid = int(parts[1])
-    reason = parts[2] if len(parts) > 2 else "የክፍያ ማረጋገጫው አልተቀበለም።"
+
+    reason = (
+        parts[2]
+        if len(parts) > 2
+        else "የክፍያ ማረጋገጫው አልተረጋገጠም።"
+    )
 
     if isinstance(waiting_for_tx, dict):
         waiting_for_tx.pop(uid, None)
@@ -394,12 +415,27 @@ def reject_payment(message):
     try:
         bot.send_message(
             uid,
-            f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\n"
-            f"ምክንያት: {reason}"
+            "❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\n\n"
+            f"📌 ምክንያት፦ {reason}\n\n"
+            "ለተጨማሪ እገዛ Admin ያነጋግሩ።"
         )
-        bot.reply_to(message, f"✅ User {uid} rejected successfully.")
+
+        bot.reply_to(
+            message,
+            f"✅ User {uid} የክፍያ ጥያቄ ውድቅ ተደርጓል።"
+        )
+
     except Exception as e:
-        bot.reply_to(message, f"⚠️ Error: {e}")
+        bot.reply_to(
+            message,
+            f"⚠️ መልዕክት መላክ አልተቻለም: {e}"
+        )
+
+
+# ==========================================
+# ADMIN: REVOKE PREMIUM
+# ==========================================
+
 @bot.message_handler(commands=["revoke"])
 def revoke_user(message):
     if message.from_user.id != ADMIN_ID:
@@ -407,13 +443,26 @@ def revoke_user(message):
 
     parts = message.text.split()
 
-    if len(parts) == 2 and parts[1].isdigit():
-        uid = int(parts[1])
-        premium_users.pop(uid, None)
-
-        bot.reply_to(message, f"❌ Premium revoked for {uid}.")
-    else:
+    if len(parts) != 2 or not parts[1].isdigit():
         bot.reply_to(message, "Usage: /revoke USER_ID")
+        return
+
+    uid = int(parts[1])
+
+    premium_users.pop(uid, None)
+
+    bot.reply_to(
+        message,
+        f"❌ Premium access revoked for {uid}."
+    )
+
+    try:
+        bot.send_message(
+            uid,
+            "❌ Premium ፈቃድዎ ተሰርዟል።"
+        )
+    except Exception:
+        pass
 
 
 # ==================================================
