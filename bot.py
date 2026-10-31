@@ -17,7 +17,7 @@ from flask import Flask, jsonify
 # ==========================================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
 ADMIN_CONTACT = "https://t.me/Nonebreaker_bot"
-ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_2](start_span)[span_2](end_span)
+ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
 
 # 💳 የቴሌብር መረጃ
 TELEBIRR_NAME = "ሸምሰዲን ሺፈ (Shemsadin Shifa)"
@@ -38,7 +38,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/18.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/19.0"})
 
 # 📊 ዴታቤዝ እና ስቴቶች
 user_points = {}        
@@ -163,7 +163,7 @@ def start(message):
         "🚀 **NETX TOOLS PRO (ULTIMATE CYBER SUITE)**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎁 **የእርስዎ ቀሪ ፖይንት:** `{user_points.get(chat_id, 20)} Points`\n\n"
-        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።[span_3](start_span)[span_3](end_span)\n"
+        "🚀 **Subdomain Finder:** ከሺህ በላይ ንዑስ ዶሜይኖችን በጥልቀት ይፈልጋል።[span_1](start_span)[span_1](end_span)\n"
         "🛠️ **Advanced Pentest:** ሴኪዩሪቲ ሄደሮች እና ኤችቲቲፒ ሜተዶችን ይመረምራል።\n"
         "🔍 **Host Scanner:** ፖርቶችን እና Bug Host ሁኔታዎችን አብጠርጥሮ ያወጣል።\n"
         "💎 **Unlimited / Premium:** በቴሌብር በመክፈል ፕሪሚየም ይሁኑ።\n\n"
@@ -225,7 +225,7 @@ def revoke_user(message):
 
 
 # ==========================================
-# 🔎 DEEP SUBDOMAIN FINDER[span_4](start_span)[span_4](end_span)
+# 🔎 DEEP SUBDOMAIN FINDER[span_2](start_span)[span_2](end_span)
 # ==========================================
 def find_subdomains(domain):
     found, notes = set(), []
@@ -579,7 +579,6 @@ def premium_callback(call):
         plan_name = "1 ዓመት (Yearly)"
         price = "400 ETB"
         
-    # ተጠቃሚው የትራንዛክሽን ኮድ እንዲልክ እናስችለዋለን
     waiting_for_tx.add(chat_id)
     
     bot.send_message(
