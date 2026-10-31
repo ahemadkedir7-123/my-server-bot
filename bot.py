@@ -39,14 +39,13 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/12.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/13.0"})
 
 # 📊 ዴታቤዝ
 user_points = {}        
-premium_users = {}      # {chat_id: expiry_datetime} (ለወር ወይም ለዓመት ፕሪሚየም ጊዜ ማብቂያ)
+premium_users = {}      
 user_referrals = {}     
 referred_users = set()  
-waiting_for_proof = set() # ስክሪን ሾት እንዲልክ የሚጠበቁ ተጠቃሚዎች
 
 
 def clean_domain(value):
@@ -93,7 +92,7 @@ def is_premium(chat_id):
         if expiry is None or expiry > datetime.now(timezone.utc):
             return True
         else:
-            del premium_users[chat_id] # ጊዜው አልፎ ከሆነ ከፕሪሚየም እናስወጣዋለን
+            del premium_users[chat_id]
     return False
 
 
@@ -120,7 +119,7 @@ def ask_domain(message, callback):
             "2. 👥 **Referral Program** በመጠቀም ጓደኞችን ይጋብዙ እና ነፃ ፖይንት ያግኙ!", parse_mode="Markdown")
         return
     
-    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`, `ethiotelecom.et`):", parse_mode="Markdown")
+    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`):", parse_mode="Markdown")
     bot.register_next_step_handler(m, callback)
 
 
@@ -190,7 +189,7 @@ def approve_month(message):
         except Exception:
             pass
     else:
-        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve <user_id>` (ለ 1 ወር)", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve <user_id>`", parse_mode="Markdown")
 
 
 @bot.message_handler(commands=["approve_year"])
@@ -208,7 +207,7 @@ def approve_year(message):
         except Exception:
             pass
     else:
-        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve_year <user_id>` (ለ 1 ዓመት)", parse_mode="Markdown")
+        bot.reply_to(message, "⚠️ አጠቃቀም: `/approve_year <user_id>`", parse_mode="Markdown")
 
 
 @bot.message_handler(commands=["revoke"])
@@ -580,8 +579,6 @@ def premium_callback(call):
         plan_name = "1 ዓመት (Yearly)"
         price = "400 ETB"
         
-    waiting_for_proof.add(chat_id)
-    
     bot.send_message(
         chat_id,
         f"💎 **የመረጡት ፓኬጅ:** `{plan_name}`\n"
@@ -590,25 +587,17 @@ def premium_callback(call):
         f"• ቁጥር: `{TELEBIRR_PHONE}`\n"
         f"• ስም: `{TELEBIRR_NAME}`\n\n"
         "🚨 **ማስጠንቀቂያ:**\n"
-        "ማንኛውንም ዓይነት ሐሰተኛ ስክሪን ሾት መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል። እባክዎ ትክክለኛ ክፍያ ይፈጽሙ!\n\n"
+        "ሐሰተኛ ስክሪን ሾት መላክ ወይም ማጭበርበር በሲስተሙ በራስ ሰር ታግተው **(Permanent Ban)** ቦቱን እንዳይጠቀሙ ያደርግዎታል።\n\n"
         "📸 **እንዴት ያረጋግጡ?**\n"
-        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) ወይም የትራንዛክሽን መረጃ በቀጥታ ወደዚህ ቻት ይላኩ!",
-        reply_markup=types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton("📤 ፎቶ / Screenshot ልክ (Send Proof)", callback_data="ready_to_send")
-        ),
+        "ብሩን ከከፈሉ በኋላ የክፍያዎን **Screenshot** (ፎቶ) በቀጥታ ወደዚህ ቻት ይላኩ!",
         parse_mode="Markdown"
     )
 
 
-@bot.callback_query_handler(func=lambda c: c.data == "ready_to_send")
-def ready_send_proof(call):
-    bot.answer_callback_query(call.id, "እባክዎ የስክሪን ሾት ፎቶውን በቀጥታ ወደዚህ ቻት ይላኩ።")
-
-
-@bot.message_handler(content_types=['photo', 'document'], func=lambda m: m.chat.id in waiting_for_proof or m.chat.id not in premium_users)
+# 🎯 የፎቶ/ስክሪን ሾት መቀበያ እና ለአድሚን ማስተላለፊያ ዋና ሃንድለር
+@bot.message_handler(content_types=['photo', 'document'], func=lambda m: True)
 def handle_payment_screenshot(message):
     chat_id = message.chat.id
-    waiting_for_proof.discard(chat_id)
     
     try:
         # ፎቶውን ለአድሚን በራሱ ሰር ማስተላለፍ
@@ -626,36 +615,17 @@ def handle_payment_screenshot(message):
         bot.reply_to(
             message,
             "✅ **የክፍያ ማረጋገጫዎ (Screenshot) ለአድሚን ተልኳል!**\n"
-            "አድሚኑ ክፍያዎን ሲያረጋግጥ የወር ወይም የአመት ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
+            "አድሚኑ ክፍያዎን ሲያረጋግጥ ፕሪሚየም (Unlimited) መዳረሻ ይሰጥዎታል። እናመሰግናለን!",
             parse_mode="Markdown"
         )
-    except Exception:
+    except Exception as e:
         bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ ድጋሚ ይሞክሩ።", parse_mode="Markdown")
 
 
-@bot.message_handler(content_types=["text", "document", "photo"], func=lambda m: True)
+@bot.message_handler(content_types=["text"], func=lambda m: True)
 def route(message):
     text = (message.text or "").strip()
     chat_id = message.chat.id
-    
-    if message.document:
-        bulk_handler(message)
-        return
-    
-    if message.content_type == 'photo':
-        try:
-            bot.forward_message(ADMIN_ID, chat_id, message.message_id)
-            bot.send_message(
-                ADMIN_ID, 
-                f"🔔 **አዲስ የክፍያ ስክሪን ሾት ደርሷል!**\n"
-                f"👤 **Sender ID:** `{chat_id}`\n\n"
-                f"• 1 ወር: `/approve {chat_id}`\n"
-                f"• 1 ዓመት: `/approve_year {chat_id}`", parse_mode="Markdown"
-            )
-            bot.reply_to(message, "✅ **የስክሪን ሾት ማረጋገጫዎ ለአድሚን ተልኳል!** አድሚኑ ሲያረጋግጠው ፕሪሚየም ይሆናሉ።", parse_mode="Markdown")
-        except Exception:
-            pass
-        return
 
     if text == "🌐 DNS Lookup": ask_domain(message, lambda m: bot.send_message(chat_id, dns_result(validate(m))[:4000], parse_mode="Markdown"))
     elif text == "🚀 Subdomain Finder": ask_domain(message, subdomain_handler)
@@ -689,7 +659,7 @@ def route(message):
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🎁 **የእርስዎ ቀሪ ፖይንት:** `{points}`\n\n"
             f"🔗 **የእርስዎ ማስተዋወቂያ ሊንክ:**\n`{ref_link}`\n\n"
-            f"💡 *ይህንን ሊንክ ለጓደኛዎችዎ በመላክ እያንዳንዱ ሰው ሲገባ **20 ፖይንት** ያግኙ! (ማጭበርበር የተከለከለ ነው)*", parse_mode="Markdown")
+            f"💡 *ይህንን ሊንክ ለጓደኛዎችዎ በመላክ እያንዳንዱ ሰው ሲገባ **20 ፖይንት** ያግኙ!*", parse_mode="Markdown")
     elif text == "💎 Get Unlimited / Premium":
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
@@ -737,6 +707,5 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with Monthly/Yearly Subscription & Anti-Cheat starting")
+    log.info("NetX Tools Pro with Fixed Photo Forwarder starting")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
-
