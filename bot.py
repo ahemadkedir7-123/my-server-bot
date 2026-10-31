@@ -17,7 +17,7 @@ from flask import Flask, jsonify
 # ⚙️ የቦት ማስተካከያ (CONFIGURATIONS)
 # ==========================================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
-ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
+ADMIN_CONTACT = "https://t.me/Nonebreaker_bot"
 ADMIN_ID = 6668128978  # የእርስዎ ትክክለኛ አድሚን ID[span_0](start_span)[span_0](end_span)
 
 # 💳 የቴሌብር መረጃ
@@ -39,7 +39,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/13.0"})
+session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NetXToolsPro/14.0"})
 
 # 📊 ዴታቤዝ
 user_points = {}        
@@ -119,7 +119,7 @@ def ask_domain(message, callback):
             "2. 👥 **Referral Program** በመጠቀም ጓደኞችን ይጋብዙ እና ነፃ ፖይንት ያግኙ!", parse_mode="Markdown")
         return
     
-    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`):", parse_mode="Markdown")
+    m = bot.send_message(chat_id, "🌐 **የሚፈልጉትን ዶሜይን ያስገቡ።** (ምሳሌ: `google.com`, `ethiotelecom.et`):", parse_mode="Markdown")
     bot.register_next_step_handler(m, callback)
 
 
@@ -594,8 +594,8 @@ def premium_callback(call):
     )
 
 
-# 🎯 የፎቶ/ስክሪን ሾት መቀበያ እና ለአድሚን ማስተላለፊያ ዋና ሃንድለር
-@bot.message_handler(content_types=['photo', 'document'], func=lambda m: True)
+# 🎯 የፎቶ/ስክሪን ሾት መቀበያ እና ለአድሚን ማስተላለፊያ ዋና ሃንድለር (content_types=['photo'])
+@bot.message_handler(content_types=['photo'])
 def handle_payment_screenshot(message):
     chat_id = message.chat.id
     
@@ -619,6 +619,7 @@ def handle_payment_screenshot(message):
             parse_mode="Markdown"
         )
     except Exception as e:
+        log.error(f"Failed to forward photo: {e}")
         bot.reply_to(message, "❌ ማረጋገጫውን መላክ አልተቻለም። እባክዎ ድጋሚ ይሞክሩ።", parse_mode="Markdown")
 
 
@@ -693,7 +694,7 @@ def dns_result(domain):
 
 @app.route("/")
 def home():
-    return jsonify({"service": "NetX Tools Pro", "status": "running"})
+    return jsonify({"service": "NetXToolsPro", "status": "running"})
 
 
 @app.route("/health")
@@ -707,5 +708,5 @@ def run_flask():
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
-    log.info("NetX Tools Pro with Fixed Photo Forwarder starting")
+    log.info("NetX Tools Pro starting successfully")
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
