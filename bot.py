@@ -8,9 +8,7 @@ from flask import Flask, jsonify
 
 # ===================== CONFIG =====================
 BOT_TOKEN = "8788982436:AAGlEaGWZgwWFcvecIJgBUOAG5L9-oB-AV0" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
-    if not BOT_TOKEN:
-    raise RuntimeError("Set BOT_TOKEN in your hosting environment.")
-
+    
 ADMIN_ID = 6668128978
 ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
 CHANNELS = ["@freeinternat10", "@Nur_Tunnel_free_ethiopian"]
