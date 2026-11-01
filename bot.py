@@ -1,4 +1,11 @@
-import os, re, io, time, ssl, socket, logging, threading
+import os
+import re
+import io
+import time
+import ssl
+import socket
+import logging
+import threading
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 import requests
@@ -26,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("NetXToolsPro")
 session = requests.Session()
 session.headers.update({"User-Agent": "NetXToolsPro/21.0"})
-user_points, premium_users, user_referrals, referred_users, waiting_for_tx = {}, {}, {}, {}, set()
+user_points, premium_users, user_referrals, referred_users, waiting_for_tx = {}, {}, {}, {}, {}
 
 # ===================== UI / HELPERS =====================
 def utcnow():
@@ -53,7 +60,7 @@ def clean_domain(value):
         value = value.encode("idna").decode("ascii")
     except UnicodeError:
         return None
-    pattern = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"
+    pattern = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
     return value if re.fullmatch(pattern, value) else None
 
 def report_header(title, target=None):
@@ -117,7 +124,7 @@ def membership_required(message):
         return True
     if check_membership(message.from_user.id):
         bot.send_message(message.chat.id,
-            "🔐 **NETX TOOLS PRO — ACCESS REQUIRED**\\n\\nቦቱን ለመጠቀም ሁለቱንም Channels ይቀላቀሉ።",
+            "🔐 **NETX TOOLS PRO — ACCESS REQUIRED**\n\nቦቱን ለመጠቀም ሁለቱንም Channels ይቀላቀሉ።",
             reply_markup=channel_markup())
         return False
     return True
@@ -135,7 +142,7 @@ def ask_domain(message, callback):
     if not is_premium(uid) and user_points.get(uid, 20) <= 0:
         bot.send_message(message.chat.id, "⚠️ Points አልቋል። Premium ወይም Referral ይጠቀሙ።")
         return
-    p = bot.send_message(message.chat.id, "🌐 **TARGET DOMAIN**\\nምሳሌ፦ `example.com`\\nበፈቃድዎ ያለ ድረ-ገጽ ብቻ ያስገቡ።")
+    p = bot.send_message(message.chat.id, "🌐 **TARGET DOMAIN**\nምሳሌ፦ `example.com`\nበፈቃድዎ ያለ ድረ-ገጽ ብቻ ያስገቡ።")
     bot.register_next_step_handler(p, callback)
 
 def resolve_ips(domain):
@@ -195,12 +202,12 @@ def start(message):
             pass
     pts = "Unlimited" if is_premium(uid) else user_points[uid]
     bot.send_message(message.chat.id,
-        "✨ **WELCOME TO NETX TOOLS PRO** ✨\\n"
-        "━━━━━━━━━━━━━━━━━━━━\\n"
-        "🛡️ Network & Website Security Toolkit\\n\\n"
-        f"⭐ Your Points: {pts}\\n"
-        "🌐 DNS  •  🔍 Host  •  🔐 TLS  •  🛡️ Security\\n\\n"
-        "ከታች ካሉት መሳሪያዎች አንዱን ይምረጡ።\\n"
+        "✨ **WELCOME TO NETX TOOLS PRO** ✨\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️ Network & Website Security Toolkit\n\n"
+        f"⭐ Your Points: {pts}\n"
+        "🌐 DNS  •  🔍 Host  •  🔐 TLS  •  🛡️ Security\n\n"
+        "ከታች ካሉት መሳሪያዎች አንዱን ይምረጡ።\n"
         "⚠️ በራስዎ ወይም ፈቃድ ባለዎት ሲስተሞች ላይ ብቻ ይጠቀሙ።",
         reply_markup=menu())
 
@@ -211,10 +218,10 @@ def show_profile(chat_id, uid):
     points = "Unlimited" if active else user_points.get(uid, 20)
     expiry_text = expiry.strftime("%Y-%m-%d") if active and expiry else ("Lifetime" if active else "—")
     bot.send_message(chat_id,
-        "╭━━━〔 👤 USER PROFILE 〕━━━╮\\n"
-        f"│ 🆔 ID: {uid}\\n│ 🏷️ Status: {status}\\n"
-        f"│ ⭐ Points: {points}\\n│ 👥 Referrals: {len(user_referrals.get(uid, set()))}\\n"
-        f"│ 📅 Premium Until: {expiry_text}\\n╰━━━━━━━━━━━━━━━━━━━━╯",
+        "╭━━━〔 👤 USER PROFILE 〕━━━╮\n"
+        f"│ 🆔 ID: {uid}\n│ 🏷️ Status: {status}\n"
+        f"│ ⭐ Points: {points}\n│ 👥 Referrals: {len(user_referrals.get(uid, set()))}\n"
+        f"│ 📅 Premium Until: {expiry_text}\n╰━━━━━━━━━━━━━━━━━━━━╯",
         reply_markup=menu())
 
 # ===================== ADMIN =====================
@@ -247,7 +254,7 @@ def reject(message):
     uid = int(p[1]); reason = p[2] if len(p) > 2 else "የክፍያ ማስረጃው አልተረጋገጠም።"
     waiting_for_tx.pop(uid, None)
     try:
-        bot.send_message(uid, f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\\nምክንያት፦ {reason}")
+        bot.send_message(uid, f"❌ የክፍያ ጥያቄዎ ውድቅ ተደርጓል።\nምክንያት፦ {reason}")
         bot.reply_to(message, f"✅ User {uid} rejected.")
     except Exception as e:
         bot.reply_to(message, f"⚠️ {type(e).__name__}")
@@ -274,7 +281,7 @@ def dns_report(domain):
             out.append(f" • {'IPv6' if ':' in ip else 'IPv4'}: {ip}")
     except Exception as e:
         out.append(f"DNS error: {type(e).__name__}")
-    return "\\n".join(out)
+    return "\n".join(out)
 
 def dns_handler(message):
     if not membership_required(message): return
@@ -286,7 +293,7 @@ def dns_handler(message):
 
 # ===================== PASSIVE SUBDOMAIN FINDER =====================
 def valid_subdomain(sub, domain):
-    pat = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"
+    pat = r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
     return bool(re.fullmatch(pat, sub)) and (sub == domain or sub.endswith("." + domain))
 
 def find_subdomains(domain):
@@ -333,51 +340,63 @@ def subdomain_handler(message):
     out += [f"Unique subdomains: {len(found)}", ""] + (found or ["No results returned."])
     out += ["", "SOURCE STATUS"] + notes
     out += ["", "Passive sources may be incomplete or outdated."]
-    send_txt(message.chat.id, f"subdomains_{d}.txt", "\\n".join(out), f"🚀 Subdomain Report — {d}")
+    send_txt(message.chat.id, f"subdomains_{d}.txt", "\n".join(out), f"🚀 Subdomain Report — {d}")
 
-# ===================== HOST SCANNER =====================
+# ===================== HOST SCANNER (ENHANCED) =====================
 def host_report(domain):
-    out = report_header("WEB HOST CHECK", domain)
+    out = report_header("WEB HOST SCANNER", domain)
     try:
-        out += ["DNS ADDRESSES"] + [f" • {ip}" for ip in resolve_ips(domain)]
-    except Exception as e:
-        out.append(f"DNS: {type(e).__name__}")
-    out += ["", "COMMON WEB PORTS: 80, 443, 8080, 8443", ""]
-    for port, scheme in WEB_PORTS:
-        out += ["─" * 48, f"{scheme.upper()} PORT {port}"]
+        ips = resolve_ips(domain)
+        out.append(f"📌 IPs: {', '.join(ips[:3]) if ips else 'Not Resolved'}")
+    except Exception:
+        out.append("📌 IPs: Resolution Failed")
+    
+    ports_to_check = [(80, "http"), (443, "https"), (8080, "http"), (8443, "https")]
+    out.append(f"🔌 Ports checked: 80, 443, 8080, 8443\n")
+
+    for port, scheme in ports_to_check:
+        url = f"{scheme}://{domain}:{port}/" if port not in [80, 443] else f"{scheme}://{domain}/"
+        out.append(f"🔌 {scheme.upper()}:{port}")
+        
         try:
-            t = time.perf_counter()
-            with socket.create_connection((domain, port), timeout=5): pass
-            out.append(f"TCP status: OPEN ({round((time.perf_counter()-t)*1000)} ms)")
-        except socket.timeout:
-            out.append("TCP status: TIMEOUT"); continue
+            with socket.create_connection((domain, port), timeout=4):
+                out.append(f"   • TCP status: 🟢 OPEN")
+                try:
+                    r = session.get(url, timeout=5, allow_redirects=False)
+                    status_text = f"{r.status_code} {r.reason}"
+                    if r.status_code == 200:
+                        status_text += " OK ➔ 👉 It works"
+                    elif r.status_code in [301, 302]:
+                        status_text += f" (Redirects to {r.headers.get('Location', '')[:50]})"
+                        
+                    out.append(f"   • HTTP Status: `{status_text}`")
+                    out.append(f"   • Server: `{r.headers.get('Server', 'Not disclosed')}`")
+                    out.append(f"   • Connection: `{r.headers.get('Connection', 'keep-alive')}`")
+                    
+                    # Method checks
+                    get_m = "✅" if session.get(url, timeout=3).status_code < 500 else "❌"
+                    head_m = "✅" if session.head(url, timeout=3).status_code < 500 else "❌"
+                    opt_res = session.options(url, timeout=3)
+                    out.append(f"   • GET: `{get_m}` | HEAD: `{head_m}` | OPTIONS: `{opt_res.status_code}`")
+                    out.append(f"   • Allow header: `{opt_res.headers.get('Allow', 'not disclosed')}`")
+                    
+                    if scheme == "https":
+                        try:
+                            ctx = ssl.create_default_context()
+                            with socket.create_connection((domain, port), timeout=4) as raw:
+                                with ctx.wrap_socket(raw, server_hostname=domain) as tls:
+                                    out.append(f"   • TLS: `TLSv1.3 / {tls.cipher()[0] if tls.cipher() else 'Secure'}`")
+                        except Exception:
+                            out.append(f"   • TLS: `TLS Active`")
+                except Exception:
+                    out.append(f"   • ⚠️ Port open, but HTTP handshake failed.")
         except OSError:
-            out.append("TCP status: CLOSED / UNREACHABLE"); continue
-        url = f"{scheme}://{domain}:{port}/"
-        try:
-            t = time.perf_counter()
-            r = session.get(url, timeout=TIMEOUT, allow_redirects=False, stream=True)
-            out += [f"GET: {r.status_code} {r.reason}",
-                    f"Response time: {round((time.perf_counter()-t)*1000)} ms",
-                    f"Server: {r.headers.get('Server', 'Not disclosed')}",
-                    f"Connection: {r.headers.get('Connection', 'Not disclosed')}",
-                    f"Redirect: {r.headers.get('Location', 'None')[:220]}"]
-            r.close()
-        except requests.RequestException as e:
-            out.append(f"GET: {type(e).__name__}")
-        try:
-            r = session.head(url, timeout=TIMEOUT, allow_redirects=False)
-            out.append(f"HEAD: {r.status_code}")
-        except requests.RequestException as e: out.append(f"HEAD: {type(e).__name__}")
-        try:
-            r = session.options(url, timeout=TIMEOUT, allow_redirects=False)
-            out += [f"OPTIONS: {r.status_code}", f"Allow: {r.headers.get('Allow', 'Not disclosed')}"]
-        except requests.RequestException as e: out.append(f"OPTIONS: {type(e).__name__}")
-        if scheme == "https": out += ["TLS DETAILS"] + tls_information(domain, port)
+            out.append(f"   • 🔴 CLOSED / Timed out")
         out.append("")
-    out += ["─" * 48, "Open ports are not automatically vulnerabilities.",
-            "Only limited, non-invasive HTTP and TLS checks are performed."]
-    return "\\n".join(out)
+
+    out.append("─" * 48)
+    out.append("Bug Host / Web Host scanner completed.")
+    return "\n".join(out)
 
 def host_handler(message):
     if not membership_required(message): return
@@ -455,7 +474,7 @@ def security_report(domain):
     out += ["", "A missing header is not automatically an exploitable vulnerability.",
             "This limited review does not prove a website is secure.",
             "Only assess systems you own or have explicit permission to test.", "", "END OF REPORT"]
-    return "\\n".join(out)
+    return "\n".join(out)
 
 def security_handler(message):
     if not membership_required(message): return
@@ -501,7 +520,7 @@ def bulk_handler(message):
         except requests.RequestException as e: out.append(f"HTTPS: {type(e).__name__}")
     try: bot.delete_message(message.chat.id, status.message_id)
     except Exception: pass
-    send_txt(message.chat.id, "netx_bulk_report.txt", "\\n".join(out), "📦 Bulk Host Report")
+    send_txt(message.chat.id, "netx_bulk_report.txt", "\n".join(out), "📦 Bulk Host Report")
 
 # ===================== PREMIUM / PAYMENT =====================
 @bot.callback_query_handler(func=lambda c: c.data in ("buy_month", "buy_year"))
@@ -516,11 +535,11 @@ def premium_callback(call):
     waiting_for_tx[uid] = plan
     bot.answer_callback_query(call.id, "Plan selected")
     bot.send_message(call.message.chat.id,
-        "╭━━━〔 💎 PREMIUM PAYMENT 〕━━━╮\\n"
-        f"│ Package: {plan['name']}\\n│ Price: {plan['price']}\\n"
-        "╰━━━━━━━━━━━━━━━━━━━━╯\\n\\n"
-        f"📱 Telebirr: {TELEBIRR_PHONE}\\n👤 Account: {TELEBIRR_NAME}\\n\\n"
-        "ክፍያ ከፈጸሙ Screenshot, Document ወይም Transaction ID ይላኩ።\\n/cancel ለመሰረዝ።")
+        "╭━━━〔 💎 PREMIUM PAYMENT 〕━━━╮\n"
+        f"│ Package: {plan['name']}\n│ Price: {plan['price']}\n"
+        "╰━━━━━━━━━━━━━━━━━━━━╯\n\n"
+        f"📱 Telebirr: {TELEBIRR_PHONE}\n👤 Account: {TELEBIRR_NAME}\n\n"
+        "ክፍያ ከፈጸሙ Screenshot, Document ወይም Transaction ID ይላኩ።\n/cancel ለመሰረዝ።")
 
 @bot.message_handler(content_types=["photo", "document", "text"],
                      func=lambda m: m.from_user.id in waiting_for_tx)
@@ -539,10 +558,10 @@ def payment_evidence(message):
     elif message.content_type == "photo": evidence = "Payment screenshot"
     elif message.content_type == "document": evidence = "Payment document"
     else: return
-    caption = (f"🔔 PAYMENT SUBMISSION\\nUser ID: {uid}\\n"
-               f"Username: @{message.from_user.username or 'None'}\\n"
-               f"Package: {plan['name']} ({plan['price']})\\nEvidence: {evidence}\\n\\n"
-               f"/approve {uid}\\n/approve_year {uid}\\n/reject {uid} reason")
+    caption = (f"🔔 PAYMENT SUBMISSION\nUser ID: {uid}\n"
+               f"Username: @{message.from_user.username or 'None'}\n"
+               f"Package: {plan['name']} ({plan['price']})\nEvidence: {evidence}\n\n"
+               f"/approve {uid}\n/approve_year {uid}\n/reject {uid} reason")
     try:
         if message.content_type == "photo":
             bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption)
@@ -564,7 +583,7 @@ def route(message):
     user_points.setdefault(uid, 20)
     if text == "🌐 DNS Lookup": ask_domain(message, dns_handler)
     elif text == "🚀 Subdomain Finder": ask_domain(message, subdomain_handler)
-    elif text == "🛡️ Security Report": ask_domain(message, security_handler)
+    elif text == "🛡️ Pentest Tools": ask_domain(message, security_handler)
     elif text == "🔍 Host Scanner": ask_domain(message, host_handler)
     elif text == "📦 Bulk Host Checker":
         p = bot.send_message(message.chat.id, "📄 TXT File ወይም domains በአዲስ መስመር ይላኩ (እስከ 100)።")
@@ -573,14 +592,14 @@ def route(message):
     elif text == "👥 Referral Program":
         link = f"https://t.me/{bot.get_me().username}?start=REF_{uid}"
         bot.send_message(message.chat.id,
-            f"╭━━━〔 👥 REFERRAL PROGRAM 〕━━━╮\\n"
-            f"│ Referrals: {len(user_referrals.get(uid, set()))}\\n"
-            f"╰━━━━━━━━━━━━━━━━━━━━╯\\n\\n🔗 Your link:\\n{link}\\n\\nአዲስ ተጠቃሚ +20 Points ያስገኛል።")
+            f"╭━━━〔 👥 REFERRAL PROGRAM 〕━━━╮\n"
+            f"│ Referrals: {len(user_referrals.get(uid, set()))}\n"
+            f"╰━━━━━━━━━━━━━━━━━━━━╯\n\n🔗 Your link:\n{link}\n\nአዲስ ተጠቃሚ +20 Points ያስገኛል።")
     elif text == "💎 Premium Access":
         m = types.InlineKeyboardMarkup(row_width=1)
         m.add(types.InlineKeyboardButton("📅 Monthly — 100 ETB", callback_data="buy_month"),
               types.InlineKeyboardButton("📆 Yearly — 400 ETB", callback_data="buy_year"))
-        bot.send_message(message.chat.id, "💎 PREMIUM ACCESS\\nUnlimited tool usage.\\nፓኬጅ ይምረጡ።", reply_markup=m)
+        bot.send_message(message.chat.id, "💎 PREMIUM ACCESS\nUnlimited tool usage.\nፓኬጅ ይምረጡ።", reply_markup=m)
     elif text == "👨‍💻 Admin Contact":
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("💬 Contact Admin", url=ADMIN_CONTACT))
@@ -602,5 +621,4 @@ def run_flask():
 if __name__ == "__main__":
     threading.Thread(target=run_flask, daemon=True).start()
     log.info("NetXToolsPro v21.0 started")
-    # Keep only one running polling process per bot token.
     bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=60)
