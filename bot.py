@@ -25,7 +25,7 @@ TELEBIRR_PHONE = "0915922481"
 PORT = int(os.getenv("PORT", "10000"))
 TIMEOUT = 12
 WEB_PORTS = [(80, "http"), (443, "https"), (8080, "http"), (8443, "https")]
-MAX_BULK = 100
+MAX_BULK = 10000
 SECURITY_HEADERS_LIST = [
     "Strict-Transport-Security", "Content-Security-Policy",
     "X-Content-Type-Options", "Referrer-Policy", "Permissions-Policy", "X-Frame-Options"
@@ -457,7 +457,7 @@ def subdomain_handler(message):
     if not d: return
     if not check_and_deduct_point(message.from_user.id):
         bot.reply_to(message, "❌ Points አልቋል።"); return
-    status = bot.send_message(message.chat.id, f"🚀 **Deep Subfinder (70+ Sources Engine):** `{d}` በጥልቀት በመቃኘት ላይ ነው... እባክዎ ትንሽ ይጠብቁ...")
+    status = bot.send_message(message.chat.id, f"🚀 **Deep Subfinder (♻️):** `{d}` በጥልቀት በመቃኘት ላይ ነው... እባክዎ ትንሽ ይጠብቁ...")
     found, notes = find_subdomains(d)
     try: bot.delete_message(message.chat.id, status.message_id)
     except Exception: pass
