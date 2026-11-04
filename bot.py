@@ -14,7 +14,7 @@ from telebot import types
 from flask import Flask, jsonify
 
 # ===================== CONFIG =====================
-BOT_TOKEN = "8788982436:AAHVB_ucWNZkoHnkrjgRlFc6gHrQtDo2yHA" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
+BOT_TOKEN = "8788982436:AAGZ9xbDEFVE06uuDEN8pYI-HaxQBXQWuIE" # እዚህ ጋር የእርስዎን ትክክለኛ ቦት ቶከን ያስገቡ
     
 ADMIN_ID = 6668128978
 ADMIN_CONTACT = "https://t.me/Nbreaker_bot"
